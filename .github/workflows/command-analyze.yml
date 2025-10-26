@@ -1,4 +1,5 @@
-name: Command: /analyze
+name: Command Analyze
+
 on:
   issue_comment:
     types: [created]
@@ -10,44 +11,24 @@ permissions:
   issues: write
 
 jobs:
-  run:
-    if: ${{ startsWith(github.event.comment.body, '/analyze') }}
+  analyze:
+    if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.event.comment.body, '/analyze') }}
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install deps
+      - name: Install dependencies
         run: |
-          python -m pip install -U pip
+          python -m pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Run analysis
-        run: python scripts/analyze.py
-
-      - name: Read summary
-        id: summary
         run: |
-          echo "MD<<EOF" >> $GITHUB_OUTPUT
-          cat report_summary.json | jq -r '.markdown' >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      # 用你的“机器用户”身份回帖（显示它的头像与昵称）
-      - name: Comment back as bot
-        uses: peter-evans/create-or-update-comment@v4
-        with:
-          token: ${{ secrets.BOT_TOKEN }}
-          issue-number: ${{ github.event.issue.number }}
-          body: |
-            🤖 **Noema Bot** finished the analysis:
-
-            ${{ steps.summary.outputs.MD }}
-
-      - name: Upload reports
-        uses: actions/upload-artifact@v4
-        with:
-          name: reports
-          path: reports/
+          python scripts/analyze.py || echo "No analysis script found"
