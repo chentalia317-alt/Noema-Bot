@@ -33,6 +33,7 @@ jobs:
       - name: Comment back as Noema-Bot
         uses: peter-evans/create-or-update-comment@v4
         with:
+          token: ${{ secrets.BOT_TOKEN }}
           issue-number: ${{ github.event.issue.number }}
           body: |
             🤖 Hello! I'm **Noema-Bot** — your assistant.
