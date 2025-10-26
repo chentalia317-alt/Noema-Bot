@@ -1,63 +1,44 @@
-name: Build and Deploy Reports
+name: Deploy reports to GitHub Pages
+
 on:
   push:
-    branches: [main]
+    branches: [ main ]
     paths:
       - 'reports/**'
-      - '.github/workflows/pages-build-deployment.yml'
   workflow_dispatch:
 
 permissions:
-  contents: write
   pages: write
   id-token: write
 
+concurrency:
+  group: 'pages'
+  cancel-in-progress: true
+
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Install Quarkdown CLI
-        run: npm install -g quarkdown-cli
-
-      - name: Build HTML reports
+      # 可选：把 REPORT.md 转成 index.html（如果没有现成的 HTML）
+      - name: Build HTML from Markdown (pandoc)
         run: |
-          mkdir -p reports
-          built=0
-          for f in reports/*.qd; do
-            [ -f "$f" ] || continue
-            echo "🧩 Building $f ..."
-            quarkdown build "$f" -o "${f%.qd}.html"
-            built=1
-          done
-          if [ "$built" -eq 0 ]; then
-            echo "No .qd files found under reports/. Nothing to build."
+          if [ -f reports/REPORT.md ]; then
+            sudo apt-get update -y && sudo apt-get install -y pandoc
+            pandoc reports/REPORT.md -s -o reports/index.html --metadata title="Noema Report"
           fi
 
-      - name: Upload static site
+      - name: Upload artifact (reports/)
         uses: actions/upload-pages-artifact@v3
         with:
           path: reports
 
-  deploy:
-    runs-on: ubuntu-latest
-    needs: build
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-
