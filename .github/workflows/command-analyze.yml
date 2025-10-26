@@ -1,4 +1,4 @@
-name: "Command: /analyze"
+name: "Command: /analyze (restore minimal)"
 
 on:
   issue_comment:
@@ -6,13 +6,12 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write      # 回推结果需要
+  contents: write
   issues: write
-  pull-requests: write
 
 jobs:
   analyze:
-    # 手动触发直接跑；评论触发仅限 Issue 且以 /analyze 开头
+    # 手动触发直接跑；评论触发仅限 Issue 且 /analyze 开头
     if: >
       ${{
         github.event_name == 'workflow_dispatch' ||
@@ -25,37 +24,38 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      TARGET_BRANCH: ${{ github.event.repository.default_branch }}   # 通常是 main
-      # 若想限制只能某个用户评论触发，填用户名；不需要则留空
-      ALLOWED_USER: ""
+      ALLOWED_USER: ""  # 先别限用户，确认链路通了再加
 
     steps:
-      # ——(可选) 白名单：仅在评论触发时生效——
+      # 调试：一眼看出触发来源
+      - name: Debug event
+        run: |
+          echo "event_name=${{ github.event_name }}"
+          echo "is_pr_comment=$(( ${{ github.event_name == 'issue_comment' && github.event.issue.pull_request != null }} ))"
+          echo "comment_user=${{ github.event_name == 'issue_comment' && github.event.comment.user.login || '' }}"
+          echo "comment_body=${{ github.event_name == 'issue_comment' && github.event.comment.body || '' }}"
+
+      # 可选：白名单（先禁用，等恢复后你再开启）
       - name: Guard allowlist
         if: ${{ github.event_name == 'issue_comment' && env.ALLOWED_USER != '' && github.event.comment.user.login != env.ALLOWED_USER }}
         run: |
           echo "Blocked: user '${{ github.event.comment.user.login }}' is not allowed."
           exit 1
 
-      - name: Checkout repository (no persisted creds)
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: false
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: "pip"
 
-      - name: Install dependencies
+      - name: Install deps
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      # ——参数解析：评论触发解析 /analyze file=xxx；手动触发给空默认——
-      - name: Parse /analyze args (issue_comment)
+      # 解析 /analyze file=xxx.csv（评论触发时）
+      - name: Parse args (issue_comment)
         if: ${{ github.event_name == 'issue_comment' }}
         id: args
         shell: bash
@@ -64,73 +64,34 @@ jobs:
           FILE=$(echo "$RAW" | sed -n 's/.*file=\([A-Za-z0-9._\/\-]\+\).*/\1/p')
           echo "file=$FILE" >> "$GITHUB_OUTPUT"
 
-      - name: Set default args (manual dispatch)
+      # 手动触发给空默认
+      - name: Default args (manual)
         if: ${{ github.event_name == 'workflow_dispatch' }}
         id: args
         run: echo "file=" >> "$GITHUB_OUTPUT"
 
-      - name: Run analysis script
+      - name: Run analysis
         env:
-          FILE: ${{ steps.args.outputs.file }}   # 为空则分析 data/ 下所有可识别文件
+          FILE: ${{ steps.args.outputs.file }}
         run: |
           echo "Analyzing FILE=${FILE:-<ALL in data/>}"
           python scripts/analyze.py
 
-      # ——可选：把 Markdown 转为 HTML，并提供三种“保存方式”——
-      - name: Set up Node (for Quarkdown)
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Build HTML report from Markdown (optional)
-        run: |
-          mkdir -p reports
-          if [ -f "reports/REPORT.md" ]; then
-            npx -y quarkdown-cli@latest compile reports/REPORT.md -o reports/noema-report.qd || true
-            npx -y quarkdown-cli@latest render  reports/noema-report.qd -o reports/noema-report.html || true
-          fi
-
-      # 方案 A：上传为 artifact（最省事）
-      - name: Upload report artifact
+      # 产物可在 Actions 页面下载
+      - name: Upload artifacts
         if: success() && hashFiles('reports/**') != ''
         uses: actions/upload-artifact@v4
         with:
           name: analyze-report
           path: reports/
 
-      # 方案 B：提交回仓库（report/ 与 docs/）
-      - name: Prepare Git identity
-        run: |
-          git config user.name  "Noema-Bot"
-          git config user.email "noema-bot@users.noreply.github.com"
-
-      - name: Publish HTML to docs/ for GitHub Pages (optional)
-        run: |
-          if [ -f reports/noema-report.html ]; then
-            mkdir -p docs/reports
-            cp -f reports/noema-report.html docs/reports/noema-report.html
-          fi
-
-      - name: Commit report artifacts to repo (optional)
-        run: |
-          git add reports/ report_summary.json docs/ || true
-          git diff --cached --quiet && echo "No changes to commit." || git commit -m "chore: update analysis artifacts [skip ci]"
-
-      - name: Push to ${TARGET_BRANCH}
-        if: ${{ success() }}
-        env:
-          GH_PAT: ${{ secrets.BOT_TOKEN }}   # 如无 PAT，也可改用 GITHUB_TOKEN：见下方注释
-        run: |
-          if git rev-parse -q --verify HEAD >/dev/null; then
-            git push "https://${GH_PAT}@github.com/${{ github.repository }}.git" HEAD:${TARGET_BRANCH}
-          fi
-
-      # 评论触发时，把简要结果回帖
-      - name: Read report summary
+      # 简要回帖（仅评论触发）
+      - name: Read summary
         id: summary
         run: |
-          if command -v jq >/dev/null 2>&1; then :
-          else sudo apt-get update -y && sudo apt-get install -y jq; fi
+          if ! command -v jq >/dev/null 2>&1; then
+            sudo apt-get update -y && sudo apt-get install -y jq
+          fi
           if [ -f report_summary.json ]; then
             MD=$(jq -r '.markdown' report_summary.json)
           else
@@ -142,24 +103,18 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Comment back as Noema-Bot
+      - name: Comment back
         if: ${{ github.event_name == 'issue_comment' }}
         uses: peter-evans/create-or-update-comment@v4
         with:
-          token: ${{ secrets.BOT_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           issue-number: ${{ github.event.issue.number }}
           body: |
-            🤖 **Noema-Bot** finished the analysis.
-
-            **Reports directory:**  
-            https://github.com/${{ github.repository }}/tree/${{ env.TARGET_BRANCH }}/reports
-
-            - Markdown summary:  
-              https://github.com/${{ github.repository }}/blob/${{ env.TARGET_BRANCH }}/reports/REPORT.md
-            - Quarkdown HTML (if generated):  
-              https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/reports/noema-report.html
+            ✅ Analysis finished.
+            Artifacts: see this run → **Actions** (top-right “Artifacts”).
             ---
             ${{ steps.summary.outputs.md }}
 
     concurrency:
-      group: a
+      group: analyze-${{ github.event_name }}-${{ github.ref || github.run_id }}
+      cancel-in-progress: true
