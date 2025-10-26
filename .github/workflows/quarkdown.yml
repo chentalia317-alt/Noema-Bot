@@ -1,0 +1,33 @@
+name: Build Quarkdown report
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'reports/*.qd'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Java (for Quarkdown CLI)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Download Quarkdown CLI
+        run: |
+          curl -L -o quarkdown.jar https://github.com/iamgio/quarkdown/releases/latest/download/quarkdown-cli.jar
+
+      - name: Build .qd -> .html
+        run: |
+          java -jar quarkdown.jar build reports/noema-report.qd -o reports/noema-report.html
+
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: reports
