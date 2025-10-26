@@ -12,17 +12,17 @@ permissions:
 
 jobs:
   analyze:
-    # 仅普通 Issue，且评论以 /analyze 开头才可触发
+    # only for simple Issue，begining with /analyze
     if: ${{ github.event.issue.pull_request == null && startsWith(github.event.comment.body, '/analyze') }}
     runs-on: ubuntu-latest
 
     env:
       TARGET_BRANCH: ${{ github.event.repository.default_branch }}  # mostly main
-      # optional：只允许本人触发；留空则不限制
+      # optional：triggered only by myself
       ALLOWED_USER: chentalia317-alt
 
     steps:
-      # 可选白名单：不允许的用户直接终止
+      # optional whitelist
       - name: Guard allowlist
         if: ${{ env.ALLOWED_USER != '' && github.event.comment.user.login != env.ALLOWED_USER }}
         run: |
@@ -45,7 +45,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # 支持 /analyze file=xxx.csv
+      # support /analyze file=xxx.csv
       - name: Parse /analyze args
         id: args
         shell: bash
@@ -61,6 +61,27 @@ jobs:
           echo "Analyzing FILE=${FILE:-<ALL in data/>}"
           python scripts/analyze.py
 
+      # Quarkdown report----------
+      - name: Set up Node (for Quarkdown)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Quarkdown CLI
+        run: npm install -g quarkdown || true
+
+      - name: Build Quarkdown report (if present)
+        run: |
+          mkdir -p reports
+          if [ -f "reports/noema-report.qd" ]; then
+            echo "Found reports/noema-report.qd, building HTML…"
+            quarkdown build reports/noema-report.qd --out reports/noema-report.html || true
+            # need PDF, try（ sometimes runner fails due to missing libraries. ）
+            # quarkdown build reports/noema-report.qd --out reports/noema-report.pdf || true
+          else
+            echo "noema-report.qd not found; skip quarkdown build."
+          fi
+
       - name: Configure git as Noema-Bot
         run: |
           git config user.name "Noema-Bot"
@@ -75,7 +96,7 @@ jobs:
       - name: Push with BOT_TOKEN (PAT)
         if: ${{ success() }}
         env:
-          GH_PAT: ${{ secrets.BOT_TOKEN }}     # 我的 PAT
+          GH_PAT: ${{ secrets.BOT_TOKEN }}     # My PAT（scopes: repo, workflow 建议）
         run: |
           if git rev-parse -q --verify HEAD >/dev/null; then
             git push "https://${GH_PAT}@github.com/${{ github.repository }}.git" HEAD:${TARGET_BRANCH}
@@ -104,10 +125,13 @@ jobs:
           body: |
             🤖 **Noema-Bot** finished the analysis.
 
-            **Full report:**  
-            https://github.com/${{ github.repository }}/blob/${{ env.TARGET_BRANCH }}/reports/REPORT.md
+            **Reports directory:**  
+            https://github.com/${{ github.repository }}/tree/${{ env.TARGET_BRANCH }}/reports
 
-            (Artifacts are in `reports/`.)
+            - Markdown summary:  
+              https://github.com/${{ github.repository }}/blob/${{ env.TARGET_BRANCH }}/reports/REPORT.md
+            - Quarkdown HTML (if generated):  
+              https://github.com/${{ github.repository }}/blob/${{ env.TARGET_BRANCH }}/reports/noema-report.html
 
             ---
             ${{ steps.summary.outputs.md }}
