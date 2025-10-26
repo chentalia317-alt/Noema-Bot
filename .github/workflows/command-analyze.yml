@@ -8,21 +8,32 @@ on:
 permissions:
   contents: write
   issues: write
+  pull-requests: write
 
 jobs:
   analyze:
-    # 只在「普通 Issue 的评论」且以 /analyze 开头时触发
+    # 仅普通 Issue，且评论以 /analyze 开头才可触发
     if: ${{ github.event.issue.pull_request == null && startsWith(github.event.comment.body, '/analyze') }}
     runs-on: ubuntu-latest
+
     env:
-      TARGET_BRANCH: ${{ github.event.repository.default_branch }} # 对于 Issue，推到默认分支（通常是 main）
+      TARGET_BRANCH: ${{ github.event.repository.default_branch }}  # mostly main
+      # optional：只允许本人触发；留空则不限制
+      ALLOWED_USER: chentalia317-alt
 
     steps:
+      # 可选白名单：不允许的用户直接终止
+      - name: Guard allowlist
+        if: ${{ env.ALLOWED_USER != '' && github.event.comment.user.login != env.ALLOWED_USER }}
+        run: |
+          echo "Blocked: user '${{ github.event.comment.user.login }}' is not allowed."
+          exit 1
+
       - name: Checkout repository (no persisted creds)
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          persist-credentials: false  # 关键：禁用 GITHUB_TOKEN 的默认凭据
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -34,10 +45,22 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run analysis script
-        run: python scripts/analyze.py
+      # 支持 /analyze file=xxx.csv
+      - name: Parse /analyze args
+        id: args
+        shell: bash
+        run: |
+          RAW="${{ github.event.comment.body }}"
+          FILE=$(echo "$RAW" | sed -n 's/.*file=\([A-Za-z0-9._\/\-]\+\).*/\1/p')
+          echo "file=$FILE" >> "$GITHUB_OUTPUT"
 
-      # 我自己的机器人开始提交
+      - name: Run analysis script
+        env:
+          FILE: ${{ steps.args.outputs.file }}   # 为空则分析 data/ 下所有可识别文件
+        run: |
+          echo "Analyzing FILE=${FILE:-<ALL in data/>}"
+          python scripts/analyze.py
+
       - name: Configure git as Noema-Bot
         run: |
           git config user.name "Noema-Bot"
@@ -45,25 +68,50 @@ jobs:
 
       - name: Commit report artifacts
         run: |
+          mkdir -p reports
           git add reports/ report_summary.json || true
-          # 若没有变化，避免失败
           git diff --cached --quiet && echo "No changes to commit." || git commit -m "chore: update analysis artifacts [skip ci]"
 
       - name: Push with BOT_TOKEN (PAT)
         if: ${{ success() }}
         env:
-          GH_PAT: ${{ secrets.BOT_TOKEN }}   # 我自己的机器人PAT
+          GH_PAT: ${{ secrets.BOT_TOKEN }}     # 我的 PAT
         run: |
-          # 若没有新提交则跳过推送
           if git rev-parse -q --verify HEAD >/dev/null; then
             git push "https://${GH_PAT}@github.com/${{ github.repository }}.git" HEAD:${TARGET_BRANCH}
           fi
 
+      - name: Read report summary
+        id: summary
+        run: |
+          sudo apt-get update -y && sudo apt-get install -y jq
+          if [ -f report_summary.json ]; then
+            MD=$(jq -r '.markdown' report_summary.json)
+          else
+            MD="No summary produced by analysis."
+          fi
+          {
+            echo "md<<EOF"
+            echo "$MD"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Comment back as Noema-Bot
         uses: peter-evans/create-or-update-comment@v4
         with:
-          token: ${{ secrets.BOT_TOKEN }}   # 用同一个 PAT 作为机器人发评论
+          token: ${{ secrets.BOT_TOKEN }}
           issue-number: ${{ github.event.issue.number }}
           body: |
-            🤖 Hello! I'm **Noema-Bot** — your assistant.
-            I've received your command and finished the analysis. Reports have been updated in `/reports`.
+            🤖 **Noema-Bot** finished the analysis.
+
+            **Full report:**  
+            https://github.com/${{ github.repository }}/blob/${{ env.TARGET_BRANCH }}/reports/REPORT.md
+
+            (Artifacts are in `reports/`.)
+
+            ---
+            ${{ steps.summary.outputs.md }}
+
+    concurrency:
+      group: analyze-${{ github.event.issue.number }}
+      cancel-in-progress: false
