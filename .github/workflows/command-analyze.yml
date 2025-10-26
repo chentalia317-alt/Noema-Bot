@@ -70,16 +70,15 @@ jobs:
       - name: Install Quarkdown CLI
         run: npm install -g quarkdown || true
 
-      - name: Build Quarkdown report (if present)
+      - name: Build HTML report from Markdown
         run: |
           mkdir -p reports
-          if [ -f "reports/noema-report.qd" ]; then
-            echo "Found reports/noema-report.qd, building HTML…"
-            quarkdown build reports/noema-report.qd --out reports/noema-report.html || true
-            # need PDF, try（ sometimes runner fails due to missing libraries. ）
-            # quarkdown build reports/noema-report.qd --out reports/noema-report.pdf || true
+          if [ -f "reports/REPORT.md" ]; then
+            echo "Found reports/REPORT.md, building HTML..."
+            npx -y quarkdown-cli@latest compile reports/REPORT.md -o reports/noema-report.qd || true
+            npx -y quarkdown-cli@latest render reports/noema-report.qd -o reports/noema-report.html || true
           else
-            echo "noema-report.qd not found; skip quarkdown build."
+            echo "reports/REPORT.md not found; skipping HTML build."
           fi
 
       - name: Configure git as Noema-Bot
