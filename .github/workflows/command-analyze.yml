@@ -160,5 +160,7 @@ jobs:
             ${{ steps.summary.outputs.md }}
 
     concurrency:
-      group: analyze-${{ github.event_name }}-${{ github.run_id }}
-      cancel-in-progress: false
+        group: analyze-${{ github.event_name }}-${{ github.ref || github.run_id }}
+        cancel-in-progress: true
+
+
