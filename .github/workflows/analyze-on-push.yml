@@ -33,3 +33,16 @@ jobs:
           git add reports/
           git commit -m "chore: auto analysis reports [skip ci]" || echo "no changes"
           git push
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Quarkdown CLI
+        run: npm install -g quarkdown
+
+      - name: Build Quarkdown report
+        run: |
+          quarkdown build reports/noema-report.qd --out reports/noema-report.html || true
+          # 如果上面 PDF 支持正常，可以再试试：
+          # quarkdown build reports/noema-report.qd --out reports/noema-report.pdf || true
