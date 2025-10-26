@@ -1,9 +1,13 @@
-name: Analyze on data push
+name: "Analyze on data push"
+
 on:
   push:
+    branches: [ main ]    # 如果默认分支不是 main 请改成你的默认分支名
     paths:
       - "data/**"
-  workflow_dispatch:
+      - "scripts/**"
+      - ".github/workflows/analyze-on-push.yml"
+  workflow_dispatch:       # 允许手动 Run workflow
 
 permissions:
   contents: write
@@ -11,32 +15,39 @@ permissions:
 jobs:
   analyze:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
 
-      - name: Set up Python
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install deps
+      - name: Install dependencies (optional)
         run: |
           python -m pip install -U pip
-          pip install -r requirements.txt
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
       - name: Run analysis
-        run: python scripts/analyze.py
-
-      - name: Upload reports
-        uses: actions/upload-artifact@v4
-        with:
-          name: reports
-          path: reports/
-
-      - name: Commit reports back
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add reports/
-          git commit -m "chore: auto analysis reports [skip ci]" || echo "no changes"
-          git push
+          if [ -f scripts/analyze.py ]; then
+            python scripts/analyze.py
+          else
+            echo "scripts/analyze.py not found" && exit 1
+          fi
+
+      # 可选：若分析会生成文件，自动提交回仓库，避免递归触发用 [skip ci]
+      - name: Commit artifacts (optional)
+        if: ${{ always() }}
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git config user.name  "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -A
+            git commit -m "chore: update analysis artifacts [skip ci]"
+            git push
+          else
+            echo "No changes to commit."
+          fi
