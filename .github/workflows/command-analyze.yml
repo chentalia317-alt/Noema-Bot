@@ -42,12 +42,16 @@ jobs:
           else
             echo "scripts/analyze.py not found" && exit 1
           fi
-
-      # 可选：把结果回帖到触发的 Issue/PR（需要在仓库 Secrets 配置 BOT_TOKEN）
-      - name: Comment back with report
-        if: ${{ github.event_name == 'issue_comment' }}
+      # 可选：把结果回帖到触发的 Issue/PR（需要仓库 Secrets 配好 BOT_TOKEN）
+      - name: Comment back as Noema-Bot
+        if: ${{ github.event_name == 'issue_comment' && github.event.issue.number }}
         uses: peter-evans/create-or-update-comment@v4
         with:
           token: ${{ secrets.BOT_TOKEN }}
           issue-number: ${{ github.event.issue.number }}
-          body-path: report_comment.md
+          # 如果你在 scripts/analyze.py 生成了 report_comment.md，建议用 body-path 自动贴完整报告：
+          # body-path: report_comment.md
+          body: |
+            🤖 **Noema-Bot** finished the analysis.
+            I've received your command and analyzed your data.
+            (Tip: switch to `body-path: report_comment.md` to post the full report.)
