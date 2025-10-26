@@ -1,8 +1,10 @@
 name: Build and Deploy Reports
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+    paths:
+      - 'reports/**'
+      - '.github/workflows/pages-build-deployment.yml'
   workflow_dispatch:
 
 permissions:
@@ -24,16 +26,21 @@ jobs:
           node-version: 20
 
       - name: Install Quarkdown CLI
-        run: |
-          npm install -g quarkdown-cli
+        run: npm install -g quarkdown-cli
 
       - name: Build HTML reports
         run: |
           mkdir -p reports
+          built=0
           for f in reports/*.qd; do
-            echo "🧩 Building $f..."
+            [ -f "$f" ] || continue
+            echo "🧩 Building $f ..."
             quarkdown build "$f" -o "${f%.qd}.html"
+            built=1
           done
+          if [ "$built" -eq 0 ]; then
+            echo "No .qd files found under reports/. Nothing to build."
+          fi
 
       - name: Upload static site
         uses: actions/upload-pages-artifact@v3
@@ -53,3 +60,4 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
