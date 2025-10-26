@@ -12,19 +12,25 @@ permissions:
 
 jobs:
   analyze:
-    # only for simple Issue，begining with /analyze
-    if: ${{ github.event.issue.pull_request == null && startsWith(github.event.comment.body, '/analyze') }}
+    # 允许手动触发；或在 Issue 中以 /analyze 开头的评论触发
+    if: >
+      ${{
+        github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'issue_comment' &&
+         github.event.issue.pull_request == null &&
+         startsWith(github.event.comment.body, '/analyze'))
+      }}
     runs-on: ubuntu-latest
 
     env:
       TARGET_BRANCH: ${{ github.event.repository.default_branch }}  # mostly main
-      # optional：triggered only by myself
+      # optional：仅允许某个用户在评论触发
       ALLOWED_USER: chentalia317-alt
 
     steps:
-      # optional whitelist
+      # ====== 仅在评论触发时进行白名单校验 ======
       - name: Guard allowlist
-        if: ${{ env.ALLOWED_USER != '' && github.event.comment.user.login != env.ALLOWED_USER }}
+        if: ${{ github.event_name == 'issue_comment' && env.ALLOWED_USER != '' && github.event.comment.user.login != env.ALLOWED_USER }}
         run: |
           echo "Blocked: user '${{ github.event.comment.user.login }}' is not allowed."
           exit 1
@@ -45,14 +51,21 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # support /analyze file=xxx.csv
-      - name: Parse /analyze args
+      # ====== 解析 /analyze 参数（仅评论触发）======
+      - name: Parse /analyze args (issue_comment)
+        if: ${{ github.event_name == 'issue_comment' }}
         id: args
         shell: bash
         run: |
           RAW="${{ github.event.comment.body }}"
           FILE=$(echo "$RAW" | sed -n 's/.*file=\([A-Za-z0-9._\/\-]\+\).*/\1/p')
           echo "file=$FILE" >> "$GITHUB_OUTPUT"
+
+      # ====== 手动触发时提供一个空的默认参数 ======
+      - name: Set default args (manual dispatch)
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        id: args
+        run: echo "file=" >> "$GITHUB_OUTPUT"
 
       - name: Run analysis script
         env:
@@ -61,7 +74,7 @@ jobs:
           echo "Analyzing FILE=${FILE:-<ALL in data/>}"
           python scripts/analyze.py
 
-      # Quarkdown report----------
+      # -------- Quarkdown 报告构建（可选）---------
       - name: Set up Node (for Quarkdown)
         uses: actions/setup-node@v4
         with:
@@ -85,7 +98,7 @@ jobs:
         run: |
           git config user.name "Noema-Bot"
           git config user.email "noema-bot@users.noreply.github.com"
-          
+
       - name: Publish HTML to docs/ for GitHub Pages
         run: |
           if [ -f reports/noema-report.html ]; then
@@ -95,7 +108,7 @@ jobs:
           else
             echo "noema-report.html not found, skip Pages publish."
           fi
-          
+
       - name: Commit report artifacts
         run: |
           mkdir -p reports
@@ -105,7 +118,7 @@ jobs:
       - name: Push with BOT_TOKEN (PAT)
         if: ${{ success() }}
         env:
-          GH_PAT: ${{ secrets.BOT_TOKEN }}     # My PAT（scopes: repo, workflow 建议）
+          GH_PAT: ${{ secrets.BOT_TOKEN }}     # 需在仓库 Settings→Secrets 配置，scopes 建议：repo, workflow
         run: |
           if git rev-parse -q --verify HEAD >/dev/null; then
             git push "https://${GH_PAT}@github.com/${{ github.repository }}.git" HEAD:${TARGET_BRANCH}
@@ -127,6 +140,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Comment back as Noema-Bot
+        if: ${{ github.event_name == 'issue_comment' }}
         uses: peter-evans/create-or-update-comment@v4
         with:
           token: ${{ secrets.BOT_TOKEN }}
@@ -141,10 +155,10 @@ jobs:
               https://github.com/${{ github.repository }}/blob/${{ env.TARGET_BRANCH }}/reports/REPORT.md
             - Quarkdown HTML (if generated):  
               https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/reports/noema-report.html
-              _(The frist start of Pages need 10s~60s)_
+              _(The first start of Pages may take 10–60s)_
             ---
             ${{ steps.summary.outputs.md }}
 
     concurrency:
-      group: analyze-${{ github.event.issue.number }}
+      group: analyze-${{ github.event_name }}-${{ github.run_id }}
       cancel-in-progress: false
