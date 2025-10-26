@@ -1,6 +1,7 @@
-name: "Command: /analyze"
+name: Command: /analyze
 on:
-  issue_comment: { types: [created] }
+  issue_comment:
+    types: [created]
   workflow_dispatch:
 
 permissions:
@@ -10,25 +11,43 @@ permissions:
 
 jobs:
   run:
-    if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.event.comment.body, '/analyze') }}
+    if: ${{ startsWith(github.event.comment.body, '/analyze') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Debug
-        run: |
-          echo "event=${{ github.event_name }}"
-          echo "body='${{ github.event.comment.body || '' }}'"
+
       - uses: actions/setup-python@v5
-        with: { python-version: "3.11" }
-      - run: |
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
           python -m pip install -U pip
           pip install -r requirements.txt
-      - run: python scripts/analyze.py    # 或 scri/analyze.py
+
+      - name: Run analysis
+        run: python scripts/analyze.py
+
+      - name: Read summary
+        id: summary
+        run: |
+          echo "MD<<EOF" >> $GITHUB_OUTPUT
+          cat report_summary.json | jq -r '.markdown' >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      # 用你的“机器用户”身份回帖（显示它的头像与昵称）
       - name: Comment back as bot
-        if: ${{ github.event_name == 'issue_comment' }}
         uses: peter-evans/create-or-update-comment@v4
         with:
           token: ${{ secrets.BOT_TOKEN }}
           issue-number: ${{ github.event.issue.number }}
           body: |
-            🤖 **Noema Bot** finished the analysis.
+            🤖 **Noema Bot** finished the analysis:
+
+            ${{ steps.summary.outputs.MD }}
+
+      - name: Upload reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports
+          path: reports/
