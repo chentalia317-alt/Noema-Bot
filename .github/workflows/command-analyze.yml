@@ -86,11 +86,21 @@ jobs:
         run: |
           git config user.name "Noema-Bot"
           git config user.email "noema-bot@users.noreply.github.com"
-
+          
+      - name: Publish HTML to docs/ for GitHub Pages
+        run: |
+          if [ -f reports/noema-report.html ]; then
+            mkdir -p docs/reports
+            cp -f reports/noema-report.html docs/reports/noema-report.html
+            echo "Copied HTML to docs/ for Pages."
+          else
+            echo "noema-report.html not found, skip Pages publish."
+          fi
+          
       - name: Commit report artifacts
         run: |
           mkdir -p reports
-          git add reports/ report_summary.json || true
+          git add reports/ report_summary.json docs/ || true
           git diff --cached --quiet && echo "No changes to commit." || git commit -m "chore: update analysis artifacts [skip ci]"
 
       - name: Push with BOT_TOKEN (PAT)
@@ -131,8 +141,8 @@ jobs:
             - Markdown summary:  
               https://github.com/${{ github.repository }}/blob/${{ env.TARGET_BRANCH }}/reports/REPORT.md
             - Quarkdown HTML (if generated):  
-              https://github.com/${{ github.repository }}/blob/${{ env.TARGET_BRANCH }}/reports/noema-report.html
-
+              https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/reports/noema-report.html
+              _(The frist start of Pages need 10s~60s)_
             ---
             ${{ steps.summary.outputs.md }}
 
