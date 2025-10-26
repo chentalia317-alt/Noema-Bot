@@ -28,7 +28,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run analysis script
-        run: python scri/analyze.py
+        run: python scripts/analyze.py
 
       - name: Comment back as Noema-Bot
         uses: peter-evans/create-or-update-comment@v4
