@@ -3,7 +3,7 @@ name: "Command /analyze"
 on:
   issue_comment:
     types: [created]     # 在 Issue/PR 新评论时触发
-  workflow_dispatch:      # 允许手动 Run workflow
+  workflow_dispatch:      # 允许manual Run workflow
 
 permissions:
   contents: write
@@ -44,19 +44,10 @@ jobs:
           fi
 
       # 可选：把结果回帖到触发的 Issue/PR（需要在仓库 Secrets 配置 BOT_TOKEN）
-      - name: Comment back as bot (optional)
+      - name: Comment back with report
         if: ${{ github.event_name == 'issue_comment' }}
         uses: peter-evans/create-or-update-comment@v4
         with:
           token: ${{ secrets.BOT_TOKEN }}
           issue-number: ${{ github.event.issue.number }}
-          body: |
-            🤖 **Noema Bot** finished the analysis on `${{ github.sha }}`.
-            - name: Comment as Noema-Bot
-              uses: peter-evans/create-or-update-comment@v4
-              with:
-                token: ${{ secrets.BOT_TOKEN }}
-                issue-number: ${{ github.event.issue.number }}
-                body: |
-                   🤖 Hello! I’m **Noema-Bot** — your assistant.
-                 I’ve received your command and will start analyzing data soon.
+          body-path: report_comment.md
