@@ -2,6 +2,10 @@
 
 ### baseline_cleaned_v7.csv
 - rows: **140**, cols: **7**
-- numeric sample column: `kss_morning`
+- numeric columns: `kss_morning, kss_afternoon, kss_evening`
 - summary: `reports/baseline_cleaned_v7_summary.csv`
-- hist: `reports/baseline_cleaned_v7_kss_morning_hist.png`
+
+#### Distributions
+![](../baseline_cleaned_v7_kss_morning_hist.png)
+![](../baseline_cleaned_v7_kss_afternoon_hist.png)
+![](../baseline_cleaned_v7_kss_evening_hist.png)
