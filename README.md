@@ -1,4 +1,4 @@
-# Noema-Bot😄
+# Noema-Bot😄(1.0 version-October 2025)
 
 > *Merging analysis, automation, and aesthetics in open science.*
 
@@ -21,18 +21,27 @@ Instead of being just another script runner, **Noema-Bot** functions as a *mini 
 
 ## Aims to
 
-**Students and early-career researchers**  
-- who want to build reproducible workflows, analyze experimental data, and generate professional-looking reports — all through clear, readable Python scripts.
+**Noema-Bot** is built to make automated, reproducible reporting accessible across different levels of research and development.
 
-**Educators and mentors**  
-- looking for a simple, open-source example to teach data analysis, visualization, or automation principles.
+---
 
-**Independent developers and open-science contributors**  
-- who want a modular base to extend their own pipelines or integrate automated reports directly with GitHub Actions.
+### Students and early-career researchers
+- who want to structure their data workflows, analyze experimental results, and generate clean, professional reports — all through readable Python code.  
 
-**Anyone exploring the intersection of science, design, and automation**  
-- who values clarity, aesthetics, and transparency in how knowledge is produced and shared.
+### Educators and mentors
+- who need a simple, open-source teaching example to demonstrate reproducible analysis, visualization, or automation principles in class.  
 
+### Citizen scientists and independent learners
+- who conduct small-scale studies or personal experiments and want to share findings transparently using open tools.  
+
+### Developers and data enthusiasts
+- who are exploring how to integrate Python analysis scripts with GitHub Actions or automate analytical pipelines in public repositories.  
+
+### Open-science and reproducibility advocates
+- who value transparent, version-controlled research workflows and want a lightweight tool to support FAIR data practices.  
+
+### Interdisciplinary creators
+- combining design, storytelling, and science, seeking an aesthetic yet rigorous way to present research or data-driven projects.  
 
 ---
 
