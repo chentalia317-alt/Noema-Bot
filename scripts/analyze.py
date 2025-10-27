@@ -1,28 +1,19 @@
 from pathlib import Path
-import os, json
+import os, json, sys
 import pandas as pd
 import numpy as np
-
-import matplotlib
-matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 DATA_DIR = Path("data")
 OUT_DIR = Path("reports")
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-
 def load_table(fp: Path) -> pd.DataFrame:
-    suf = fp.suffix.lower()
-    if suf == ".csv":
-        # 容错：常见编码/分隔符
-        try:
-            return pd.read_csv(fp)
-        except Exception:
-            return pd.read_csv(fp, encoding="utf-8", sep=None, engine="python")
-    if suf in (".xls", ".xlsx"):
+    if fp.suffix.lower() == ".csv":
+        return pd.read_csv(fp)
+    if fp.suffix.lower() in (".xls", ".xlsx"):
         return pd.read_excel(fp)
-    if suf == ".json":
+    if fp.suffix.lower() == ".json":
         return pd.read_json(fp)
     raise ValueError(f"Unsupported file: {fp.name}")
 
@@ -31,18 +22,10 @@ def first_numeric_col(df: pd.DataFrame) -> str | None:
     return cols[0] if cols else None
 
 def plot_hist(df: pd.DataFrame, col: str, out_png: Path):
-    s = pd.to_numeric(df[col], errors="coerce").dropna()
-    if s.empty:
-        return
     plt.figure()
-    s.plot(kind="hist", bins=30)
-    plt.title(f"{col} histogram")
-    plt.xlabel(col)
-    plt.ylabel("count")
-    plt.tight_layout()
-    plt.savefig(out_png, dpi=150)
-    plt.close()
-
+    df[col].dropna().astype(float).plot(kind="hist", bins=30)
+    plt.title(f"{col} histogram"); plt.xlabel(col); plt.ylabel("count")
+    plt.tight_layout(); plt.savefig(out_png, dpi=150); plt.close()
 
 def analyze_one(fp: Path) -> dict:
     name = fp.stem
@@ -52,34 +35,31 @@ def analyze_one(fp: Path) -> dict:
     summary_csv = OUT_DIR / f"{name}_summary.csv"
     df.describe(include="all").T.to_csv(summary_csv)
 
-    # Select a numerical column to create a graph (if)
+    # 选择一个数值列画图（如果有）
     png_path = None
     col = first_numeric_col(df)
     if col:
         png_path = OUT_DIR / f"{name}_{col}_hist.png"
         plot_hist(df, col, png_path)
 
-    # REPORT.md 在 reports/ 里，
-    md_lines = [
+    # 报告的一段 Markdown
+    md = [
         f"### {fp.name}",
-        "",
-        f"- Rows: **{df.shape[0]}**, Cols: **{df.shape[1]}**",
-        f"- Numeric sample column: `{col}`" if col else "- Numeric sample column: *N/A*",
-        f"- 📊 Summary file: [{summary_csv.name}]({summary_csv.name})",
+        f"- rows: **{df.shape[0]}**, cols: **{df.shape[1]}**",
+        f"- numeric sample column: `{col}`" if col else "- numeric sample column: *N/A*",
+        f"- summary: `reports/{summary_csv.name}`",
     ]
     if png_path:
-        md_lines.append(f"- 🖼️ Histogram:\n  \n  ![hist]({png_path.name})")
-    md = "\n".join(md_lines)
-
+        md.append(f"- hist: `reports/{png_path.name}`")
     return {
         "data_file": str(fp),
         "summary_csv": str(summary_csv) if summary_csv else None,
         "plot_png": str(png_path) if png_path else None,
-        "report_md": md,
+        "report_md": "\n".join(md)
     }
 
 def main():
-    # Supports optional single-file analysis: can be passed through the environment variable FILE=xxx.csv
+    # 支持可选的单文件分析：通过环境变量 FILE=xxx.csv 传入
     only = os.getenv("FILE", "").strip()
     targets = []
     if only:
@@ -90,83 +70,29 @@ def main():
             targets = [p]
 
     if not targets:
-        targets = [p for p in DATA_DIR.glob("**/*")
-                   if p.suffix.lower() in (".csv", ".xls", ".xlsx", ".json")]
+        targets = [p for p in DATA_DIR.glob("**/*") if p.suffix.lower() in (".csv",".xls",".xlsx",".json")]
 
     if not targets:
         note = "No data files in data/. Nothing to analyze."
         print(note)
-        Path("report_summary.json").write_text(
-            json.dumps({"markdown": note, "items": []}, ensure_ascii=False),
-            encoding="utf-8",
-        )
+        Path("report_summary.json").write_text(json.dumps({"markdown": note}, ensure_ascii=False), encoding="utf-8")
         return
 
-    blocks = ["## 🧪 Auto Analysis Report", ""]
-    items = []
+    blocks = ["## 🧪 Auto Analysis Report"]
+    outputs = []
     for fp in targets:
         try:
             res = analyze_one(fp)
-            items.append(res)
+            outputs.append(res)
             blocks.append(res["report_md"])
-            blocks.append("")  # 每块之间空行
         except Exception as e:
             blocks.append(f"- **{fp.name}** ❌ {e}")
-            blocks.append("")
 
-    # 汇总报告（放在 reports/ 下）
-    report_md = "\n".join(blocks).rstrip() + "\n"
+    # 汇总报告
+    report_md = "\n\n".join(blocks)
     (OUT_DIR / "REPORT.md").write_text(report_md, encoding="utf-8")
-
-    Path("report_summary.json").write_text(
-        json.dumps({"markdown": report_md, "items": items}, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    Path("report_summary.json").write_text(json.dumps({"markdown": report_md, "items": outputs}, ensure_ascii=False), encoding="utf-8")
     print("Analysis finished.")
-
+    
 if __name__ == "__main__":
     main()
-
-    #quarkdown
-
-from datetime import datetime
-
-summary_path = Path("report_summary.json")
-if summary_path.exists():
-    summary = json.loads(summary_path.read_text(encoding="utf-8"))
-    items = summary.get("items", [])
-
-    qd_lines = [
-        ".doctype {paged}",
-        f".title {{Noema-Lab Open Report · {datetime.now():%Y-%m-%d}}}",
-        ".author {Talia Chen & Noema-Bot}",
-        f".date {{{datetime.now():%B %d, %Y}}}",
-        "",
-        "# Overview",
-        "This report is automatically generated by **Noema-Bot**.",
-        "It summarizes datasets found under `data/` and compiles basic statistics and visualizations.",
-        "",
-        "# Datasets",
-        "",
-    ]
-
-    for it in items:
-        data_file = it.get("data_file", "")
-        summary_csv = Path(it.get("summary_csv", "")).name if it.get("summary_csv") else ""
-        plot_png = Path(it.get("plot_png", "")).name if it.get("plot_png") else ""
-        qd_lines.append(f"## {Path(data_file).name}")
-        if summary_csv:
-            # 与 HTML 同目录，直接用文件名
-            qd_lines.append(f"- Summary: `{summary_csv}`")
-        if plot_png:
-            # ～
-            qd_lines.append(f".image {{{plot_png}}}")
-        qd_lines.append("")
-
-    qd_lines += [
-        "# Notes",
-        "> The important thing is not to stop questioning.",
-        "",
-    ]
-
-    (OUT_DIR / "noema-report.qd").write_text("\n".join(qd_lines), encoding="utf-8")

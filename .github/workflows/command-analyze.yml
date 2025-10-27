@@ -1,4 +1,4 @@
-name: "Command: /analyze (restore minimal)"
+name: "Command: /analyze"
 
 on:
   issue_comment:
@@ -8,113 +8,67 @@ on:
 permissions:
   contents: write
   issues: write
+  pull-requests: write
 
 jobs:
-  analyze:
-    # 手动触发直接跑；评论触发仅限 Issue 且 /analyze 开头
-    if: >
-      ${{
-        github.event_name == 'workflow_dispatch' ||
-        (
-          github.event_name == 'issue_comment' &&
-          github.event.issue.pull_request == null &&
-          startsWith(github.event.comment.body, '/analyze')
-        )
-      }}
+  run:
+    if: ${{ startsWith(github.event.comment.body, '/analyze') }}
     runs-on: ubuntu-latest
-
-    env:
-      ALLOWED_USER: ""  # 先别限用户，确认链路通了再加
-
     steps:
-      # 调试：一眼看出触发来源
-      - name: Debug event
-        run: |
-          echo "event_name=${{ github.event_name }}"
-          echo "is_pr_comment=$(( ${{ github.event_name == 'issue_comment' && github.event.issue.pull_request != null }} ))"
-          echo "comment_user=${{ github.event_name == 'issue_comment' && github.event.comment.user.login || '' }}"
-          echo "comment_body=${{ github.event_name == 'issue_comment' && github.event.comment.body || '' }}"
-
-      # 可选：白名单（先禁用，等恢复后你再开启）
-      - name: Guard allowlist
-        if: ${{ github.event_name == 'issue_comment' && env.ALLOWED_USER != '' && github.event.comment.user.login != env.ALLOWED_USER }}
-        run: |
-          echo "Blocked: user '${{ github.event.comment.user.login }}' is not allowed."
-          exit 1
-
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: "pip"
 
       - name: Install deps
         run: |
-          python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          python -m pip install -U pip
+          pip install -r requirements.txt
 
-      # 解析 /analyze file=xxx.csv（评论触发时）
-      - name: Parse args (issue_comment)
-        if: ${{ github.event_name == 'issue_comment' }}
+      # 解析可选参数：/analyze file=xxx.csv
+      - name: Parse arg
         id: args
-        shell: bash
         run: |
           RAW="${{ github.event.comment.body }}"
-          FILE=$(echo "$RAW" | sed -n 's/.*file=\([A-Za-z0-9._\/\-]\+\).*/\1/p')
-          echo "file=$FILE" >> "$GITHUB_OUTPUT"
-
-      # 手动触发给空默认
-      - name: Default args (manual)
-        if: ${{ github.event_name == 'workflow_dispatch' }}
-        id: args
-        run: echo "file=" >> "$GITHUB_OUTPUT"
+          FILE=$(echo "$RAW" | sed -n 's/.*file=\([A-Za-z0-9._\-\/]\+\).*/\1/p')
+          echo "file=$FILE" >> $GITHUB_OUTPUT
 
       - name: Run analysis
         env:
           FILE: ${{ steps.args.outputs.file }}
-        run: |
-          echo "Analyzing FILE=${FILE:-<ALL in data/>}"
-          python scripts/analyze.py
+        run: python scripts/analyze.py
 
-      # 产物可在 Actions 页面下载
-      - name: Upload artifacts
-        if: success() && hashFiles('reports/**') != ''
-        uses: actions/upload-artifact@v4
-        with:
-          name: analyze-report
-          path: reports/
-
-      # 简要回帖（仅评论触发）
-      - name: Read summary
+      - name: Read summary (install jq)
         id: summary
         run: |
-          if ! command -v jq >/dev/null 2>&1; then
-            sudo apt-get update -y && sudo apt-get install -y jq
-          fi
-          if [ -f report_summary.json ]; then
-            MD=$(jq -r '.markdown' report_summary.json)
-          else
-            MD="No summary produced by analysis."
-          fi
-          {
-            echo "md<<EOF"
-            echo "$MD"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+          sudo apt-get update && sudo apt-get install -y jq
+          MD=$(cat report_summary.json | jq -r '.markdown')
+          echo "md<<EOF" >> $GITHUB_OUTPUT
+          echo "$MD" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Comment back
-        if: ${{ github.event_name == 'issue_comment' }}
+      - name: Commit reports back
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add reports/
+          git commit -m "chore: update analysis artifacts [skip ci]" || echo "no changes"
+          git push
+
+      # 用你的机器人身份回帖（需要已配置 BOT_TOKEN）
+      - name: Comment back as Noema-Bot
         uses: peter-evans/create-or-update-comment@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.BOT_TOKEN }}
           issue-number: ${{ github.event.issue.number }}
           body: |
-            ✅ Analysis finished.
-            Artifacts: see this run → **Actions** (top-right “Artifacts”).
+            🤖 **Noema-Bot** finished the analysis.
+
+            **Report (full):**
+            https://github.com/${{ github.repository }}/blob/main/reports/REPORT.md
+
+            (Plots & CSVs are in `reports/`.)
+
             ---
             ${{ steps.summary.outputs.md }}
-
-    concurrency:
-      group: analyze-${{ github.event_name }}-${{ github.ref || github.run_id }}
-      cancel-in-progress: true
