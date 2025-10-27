@@ -38,7 +38,7 @@ It’s designed for:
 
 ### 1️⃣ Run locally
 ```bash
-git clone https://github.com/<your-username>/Noema-Bot.git
+git clone https://github.com/chentalia317-alt<your-username>/Noema-Bot.git
 cd Noema-Bot
 pip install -r requirements.txt
 python scripts/analyze.py
