@@ -78,7 +78,7 @@ jobs:
       - name: Install Quarkdown CLI
         run: |
           curl -fsSL https://raw.githubusercontent.com/quarkdown-labs/get-quarkdown/refs/heads/main/install.sh | sudo env "PATH=$PATH" bash
-          quarkdown -v
+          quarkdown --version || ture
 
       - name: Compile .qd to HTML
         run: |
