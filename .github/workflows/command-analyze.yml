@@ -26,7 +26,7 @@ jobs:
           python -m pip install -U pip
           pip install -r requirements.txt
 
-      # 解析可选参数：/analyze file=xxx.csv
+      # Parse optional parameters：/analyze file=xxx.csv
       - name: Parse arg
         id: args
         run: |
@@ -38,6 +38,21 @@ jobs:
         env:
           FILE: ${{ steps.args.outputs.file }}
         run: python scripts/analyze.py
+
+      - name: Install Quarkdown (CLI + deps)
+        run: |
+          # needs Java 17+；automatically install missing dependencies
+          curl -fsSL https://raw.githubusercontent.com/quarkdown-labs/get-quarkdown/refs/heads/main/install.sh | sudo env "PATH=$PATH" bash
+          quarkdown -v
+
+      # if qd in root/：noema-report.qd
+      - name: Compile Quarkdown to HTML (and optional PDF)
+        run: |
+          mkdir -p reports
+          # generate HTML
+          quarkdown c noema-report.qd -o reports
+          # if PDF is needed，adding a new line（runner will pull Puppeteer）
+          # quarkdown c noema-report.qd -o reports --pdf
 
       - name: Read summary (install jq)
         id: summary
@@ -56,7 +71,7 @@ jobs:
           git commit -m "chore: update analysis artifacts [skip ci]" || echo "no changes"
           git push
 
-      # 用你的机器人身份回帖（需要已配置 BOT_TOKEN）
+      # Talia-rob reply（needs BOT_TOKEN）
       - name: Comment back as Noema-Bot
         uses: peter-evans/create-or-update-comment@v4
         with:
