@@ -1,4 +1,4 @@
-# Noema-Bot
+# Noema-Bot😄
 
 > *Merging analysis, automation, and aesthetics in open science.*
 
@@ -47,7 +47,14 @@ python scripts/analyze.py
 
 ### 2️⃣ Run via GitHub Actions
 Comment in an Issue:
-**/analyze**
-or manually trigger the workflow from the Actions tab.
+**/analyze** + files name (example: /analyze file=panda.csv) or manually trigger the workflow from the Actions tab.
+<br>
 Your analysis results and report will be automatically uploaded to the repository.
+
+---
+
+### 🧩 *Note:* The current version of **Noema-Bot** only supports **histogram visualization**.  
+However, the analysis pipeline is designed to be **modular and extensible**, allowing future integration of more advanced visualization methods (e.g., boxplots, density curves, and correlation heatmaps).  
+This structure makes it easy to expand Noema-Bot as a general-purpose scientific analysis assistant over time.
+
 
