@@ -83,7 +83,7 @@ Your analysis results and report will be automatically uploaded to the repositor
 However, the analysis pipeline is designed to be **modular and extensible**, allowing future integration of more advanced visualization methods (e.g., boxplots, density curves, and correlation heatmaps).  
 This structure makes it easy to expand Noema-Bot as a general-purpose scientific analysis assistant over time.
 
-
+---
 ## Future Plans (WIP)
 
 The current version of **Noema-Bot** focuses on basic visualization (only histogram) and automated report generation.  
