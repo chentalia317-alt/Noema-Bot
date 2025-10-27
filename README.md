@@ -2,7 +2,7 @@
 
 > *Merging analysis, automation, and aesthetics in open science.*
 
-Noema-Bot, created by [@TaliaChen](https://github.com/chentalia317-alt), is a modular research assistant that **analyzes data, generates dynamic reports, and transforms scientific results into elegant, reproducible web pages**.
+Noema-Bot, created by [@TaliaChen](https://github.com/chentalia317-alt), is a modular research assistant that **analyzes data, generates dynamic reports, and transforms scientific results into simple, reproducible web pages**.
 It integrates lightweight Python analysis pipelines with **Quarkdown-based HTML rendering**, creating an end-to-end framework for transparent, automated scientific reporting.
 
 ---
