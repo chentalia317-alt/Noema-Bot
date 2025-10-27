@@ -84,3 +84,15 @@ However, the analysis pipeline is designed to be **modular and extensible**, all
 This structure makes it easy to expand Noema-Bot as a general-purpose scientific analysis assistant over time.
 
 
+## Future Plans (WIP)
+
+The current version of **Noema-Bot** focuses on basic visualization (only histogram) and automated report generation.  
+In upcoming updates, the project aims to expand its analytical and rendering capabilities to include:
+
+- **Advanced visualizations** — integration of boxplots, density plots, correlation heatmaps, and time-series analysis...  
+- **Modular analytics** — support for plug-in modules that allow users to add their own data-processing scripts.  
+- **Enhanced Quarkdown templates** — improved report aesthetics, multi-section layouts, and interactive charts.  
+- **Cross-dataset automation** — enabling batch analysis for multiple files or longitudinal datasets.  
+- **Web publishing** — direct rendering of Quarkdown reports to GitHub Pages or other static-site platforms.  
+
+The long-term goal is to turn **Noema-Bot** into a flexible, open-source and effective assistant for transparent and aesthetic scientific reporting🤩.
