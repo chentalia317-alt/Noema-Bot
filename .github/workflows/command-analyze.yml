@@ -90,16 +90,19 @@ jobs:
         run: |
           mkdir -p reports
           quarkdown c noema-report.qd -o reports
-          
-           # 🪄 Move generated Quarkdown output to root
-          if [ -f reports/Untitled-Quarkdown-Document/index.html ]; then
-            mv reports/Untitled-Quarkdown-Document/index.html reports/index.html
-            cp -r reports/Untitled-Quarkdown-Document/script reports/ 2>/dev/null || true
-            cp -r reports/Untitled-Quarkdown-Document/theme reports/ 2>/dev/null || true
-            rm -rf reports/Untitled-Quarkdown-Document
+
+          FOUND_DIR=$(find reports -maxdepth 2 -type f -name index.html -printf '%h\n' | head -n1)
+          if [ -n "$FOUND_DIR" ] && [ "$FOUND_DIR" != "reports" ]; then
+            mv "$FOUND_DIR/index.html" reports/index.html
+            [ -d "$FOUND_DIR/script" ] && cp -r "$FOUND_DIR/script" reports/
+            [ -d "$FOUND_DIR/theme" ] && cp -r "$FOUND_DIR/theme" reports/
           fi
 
           touch reports/.nojekyll
+
+          echo "== reports =="
+          ls -Rla reports
+
           
       - name: List built files (recursive)
         run: |
