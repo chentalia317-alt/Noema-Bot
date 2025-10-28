@@ -86,10 +86,11 @@ jobs:
           curl -fsSL https://raw.githubusercontent.com/quarkdown-labs/get-quarkdown/refs/heads/main/install.sh | sudo env "PATH=$PATH" bash
           quarkdown --version || true
 
-            - name: Verify outputs exist
+      - name: Verify outputs exist
         run: |
           echo "== repo root ==" && ls -la
           echo "== reports dir ==" && ls -la reports || true
+
 
       - name: Compile .qd to HTML (dashboard & full report)
         run: |
