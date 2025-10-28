@@ -200,8 +200,6 @@ def main():
     Path("noema-report.qd").write_text(qd, encoding="utf-8")
     print("Analysis finished.")
 
-if __name__ == "__main__":
-    main()
     # 2025-10-28
     # === Build a simple dashboard (multi-dataset index) ===
     # Collect the summaries of each dataset and select the first figure as the thumbnail.
