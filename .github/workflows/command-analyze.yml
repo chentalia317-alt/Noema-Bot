@@ -91,7 +91,12 @@ jobs:
           mkdir -p reports
           quarkdown c noema-report.qd -o reports
           touch reports/.nojekyll
-
+          
+      - name: List built files (recursive)
+        run: |
+          echo "== reports =="
+          ls -Rla reports
+          
       - name: Commit reports back
         run: |
           git config user.name "github-actions[bot]"
