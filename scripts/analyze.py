@@ -197,6 +197,7 @@ def main():
 {report_md}
 """)
     (OUT_DIR / "noema-report.qd").write_text(qd, encoding="utf-8")
+    print("Writing QD to:", (OUT_DIR / "noema-report.qd"))
 
     # === Build a simple dashboard (multi-dataset index) ===
     # generating slug
@@ -234,5 +235,6 @@ def main():
 """)
 
     (OUT_DIR / "dashboard.qd").write_text(dashboard_qd, encoding="utf-8")
+    print("Writing QD to:", (OUT_DIR / "dashboard.qd"))
 
     print("Analysis finished.")
