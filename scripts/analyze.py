@@ -182,6 +182,7 @@ def main():
         json.dumps({"markdown": report_md, "items": outputs}, ensure_ascii=False),
         encoding="utf-8"
     )
+    
     # 2025-10-28, generating Quarkdown (.qd)
     from textwrap import dedent
 
@@ -196,10 +197,12 @@ def main():
 {report_md}
 """)
 
+
+    qd = qd.replace("“", '"').replace("”", '"').replace("’", "'")
+
     Path("noema-report.qd").write_text(qd, encoding="utf-8")
     print("Analysis finished.")
 
-    
 if __name__ == "__main__":
     main()
 
