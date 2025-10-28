@@ -9,9 +9,11 @@ import matplotlib.pyplot as plt
 import shutil
 
 # Define directories first
-DATA_DIR = Path("data")
-OUT_DIR = Path("reports")
+ROOT_DIR = Path(__file__).resolve().parent.parent
+OUT_DIR = ROOT_DIR / "reports"
+DATA_DIR = ROOT_DIR / "data"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
+
 
 # Optional cleaning step
 CLEAN = os.getenv("CLEAN", "1") == "1"   # CLEAN=0 to keep old files
@@ -24,6 +26,7 @@ if CLEAN and OUT_DIR.exists():
             shutil.rmtree(p)
         else:
             p.unlink()
+OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Detect column names that look like identifiers rather than data fields
 ID_LIKE_PATTERN = re.compile(
@@ -238,3 +241,12 @@ def main():
     print("Writing QD to:", (OUT_DIR / "dashboard.qd"))
 
     print("Analysis finished.")
+    print("== DEBUG FILE CHECK ==")
+    for f in OUT_DIR.glob("*.qd"):
+        print("Found QD:", f)
+    print("== OUT_DIR contents ==")
+    for f in OUT_DIR.iterdir():
+        print(" -", f)
+        
+if __name__ == "__main__":
+    main()
