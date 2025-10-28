@@ -1,6 +1,7 @@
 .docname {Noema-Bot Dashboard}
-.doctype {plain}     
+.doctype {plain}
 .theme {darko}
+.allowhtml {true}
 
 # 🧭 Report Index
 
