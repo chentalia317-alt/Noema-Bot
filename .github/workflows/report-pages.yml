@@ -44,11 +44,11 @@ jobs:
           # Disable Pages from using Jekyll 
           touch reports/.nojekyll
 
-      - name: Upload artifact (reports/)
+      - name: Upload artifact (root index)
         uses: actions/upload-pages-artifact@v3
         with:
           path: reports
-
+          
   deploy:
     needs: build
     runs-on: ubuntu-latest
