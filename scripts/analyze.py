@@ -129,7 +129,7 @@ def analyze_one(fp: Path, n_limit: int | None = None) -> dict:
     ]
     for p in pngs:
         if p.endswith(".png"):
-            lines.append(f"![]({p})")
+            lines.append(f"![](reports/{p})")
         else:
             lines.append(f"- {p}")
 
