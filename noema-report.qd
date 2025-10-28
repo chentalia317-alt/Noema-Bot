@@ -1,3 +1,7 @@
+---
+name: Noema-Report
+title: Auto Analysis Summary
+---
 .docname {Noema Report}
     .doctype {paged}
     .theme {darko}
