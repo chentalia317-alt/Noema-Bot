@@ -92,29 +92,38 @@ jobs:
           mkdir -p reports
 
           # 1) total（noema-report.qd), put into subdir temporarily，and then renamed as report.html
-          quarkdown c noema-report.qd -o reports
-          FULL_DIR=$(find reports -maxdepth 2 -type f -name index.html -printf '%h\n' | head -n1)
-          if [ -n "$FULL_DIR" ] && [ "$FULL_DIR" != "reports" ]; then
-            mv "$FULL_DIR/index.html" reports/report.html
-            [ -d "$FULL_DIR/script" ] && cp -r "$FULL_DIR/script" reports/
-            [ -d "$FULL_DIR/theme" ] && cp -r "$FULL_DIR/theme" reports/
-            rm -rf "$FULL_DIR"
+          if [ -f noema-report.qd ]; then
+            quarkdown c noema-report.qd -o reports
+            FULL_DIR=$(find reports -maxdepth 2 -type f -name index.html -printf '%h\n' | head -n1)
+            if [ -n "$FULL_DIR" ] && [ "$FULL_DIR" != "reports" ]; then
+              mv "$FULL_DIR/index.html" reports/report.html
+              [ -d "$FULL_DIR/script" ] && cp -r "$FULL_DIR/script" reports/
+              [ -d "$FULL_DIR/theme" ] && cp -r "$FULL_DIR/theme" reports/
+              rm -rf "$FULL_DIR"
+            fi
+          else
+            echo "noema-report.qd not found!"
+            exit 1
           fi
 
           # 2) complile dashboard（dashboard.qd), put into reports/index.html
-          quarkdown c dashboard.qd -o reports
-          DASH_DIR=$(find reports -maxdepth 2 -type f -name index.html -printf '%h\n' | head -n1)
-          if [ -n "$DASH_DIR" ] && [ "$DASH_DIR" != "reports" ]; then
-            mv "$DASH_DIR/index.html" reports/index.html
-            [ -d "$DASH_DIR/script" ] && cp -r "$DASH_DIR/script" reports/
-            [ -d "$DASH_DIR/theme" ] && cp -r "$DASH_DIR/theme" reports/
-            rm -rf "$DASH_DIR"
+          if [ -f dashboard.qd ]; then
+            quarkdown c dashboard.qd -o reports
+            DASH_DIR=$(find reports -maxdepth 2 -type f -name index.html -printf '%h\n' | head -n1)
+            if [ -n "$DASH_DIR" ] && [ "$DASH_DIR" != "reports" ]; then
+              mv "$DASH_DIR/index.html" reports/index.html
+              [ -d "$DASH_DIR/script" ] && cp -r "$DASH_DIR/script" reports/
+              [ -d "$DASH_DIR/theme" ] && cp -r "$DASH_DIR/theme" reports/
+              rm -rf "$DASH_DIR"
+            fi
+          else
+            echo "dashboard.qd not found, fallback to report.html as index"
+            cp -f reports/report.html reports/index.html
           fi
 
           touch reports/.nojekyll
 
-          echo "== reports tree =="
-          ls -Rla reports
+          echo "== reports tree ==" && ls -Rla reports
 
           
       - name: List built files (recursive)
