@@ -1,0 +1,14 @@
+2025-10-28 Progress Log
+Today's Focus: Worked mainly on debugging the analysis flow 
+Tried to make the bot handle multiple data tables at once, but the thumbnails didn’t render yet.  
+Planning to add automatic column detection for each table to generate plots dynamically.  
+Also noticed Quarkdown still outputs everything under “Untitled-Quarkdown-Document,” which makes the path messy.  
+Might fix it later by adding a title argument or manually renaming the output folder.
+
+Next steps:
+- Get multi-table thumbnails to render properly  
+- Test the column detection logic  
+- Clean up the HTML output path
+
+
+
