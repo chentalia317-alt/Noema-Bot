@@ -185,7 +185,7 @@ def main():
     # 2025-10-28, generating Quarkdown (.qd)
     from textwrap import dedent
 
-    qd = dedent(f"""\
+qd = dedent(f"""\
 {{{{ docname("Noema Report") }}}}
 {{{{ doctype("document") }}}}
 {{{{ theme("darko") }}}}
