@@ -6,10 +6,29 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import shutil
+
+# Define directories first
+DATA_DIR = Path("data")
+OUT_DIR = Path("reports")
+OUT_DIR.mkdir(parents=True, exist_ok=True)
+
+# Optional cleaning step
+CLEAN = os.getenv("CLEAN", "1") == "1"   # CLEAN=0 to keep old files
+if CLEAN and OUT_DIR.exists():
+    for p in OUT_DIR.iterdir():
+        # Keep REPORT.md (skip deleting)
+        if p.is_file() and p.name == "REPORT.md":
+            continue
+        if p.is_dir():
+            shutil.rmtree(p)
+        else:
+            p.unlink()
 
 # Detect column names that look like identifiers rather than data fields
-ID_LIKE_PATTERN = re.compile(r'(?:^|_)(id|uuid|index|sampleid|subjectid|recordid|caseid|patientid)(?:$|_)', re.IGNORECASE)
-
+ID_LIKE_PATTERN = re.compile(
+    r'(?:^|_)(id|uuid|index|sampleid|subjectid|recordid|caseid|patientid)(?:$|_)',
+    re.IGNORECASE)
 
 DATA_DIR = Path("data")
 OUT_DIR = Path("reports")
@@ -179,3 +198,4 @@ def main():
     
 if __name__ == "__main__":
     main()
+
