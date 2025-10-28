@@ -129,7 +129,7 @@ def analyze_one(fp: Path, n_limit: int | None = None) -> dict:
     ]
     for p in pngs:
         if p.endswith(".png"):
-            lines.append(f"![](reports/{p})")
+            lines.append(f"![]({p})")
         else:
             lines.append(f"- {p}")
 
@@ -196,7 +196,7 @@ def main():
 
 {report_md}
 """)
-    Path("noema-report.qd").write_text(qd, encoding="utf-8")
+    (OUT_DIR / "noema-report.qd").write_text(qd, encoding="utf-8")
 
     # === Build a simple dashboard (multi-dataset index) ===
     # generating slug
@@ -220,9 +220,10 @@ def main():
 """.strip()
         cards.append(card_html)
 
+    from textwrap import dedent
     dashboard_qd = dedent(f"""\
 .docname {{Noema-Bot Dashboard}}
-.doctype {{plain}}
+.doctype {{plain}}     
 .theme {{darko}}
 
 # 🧭 Report Index
@@ -231,6 +232,7 @@ def main():
 
 {chr(10).join(cards) if cards else "_No datasets found._"}
 """)
-    Path("dashboard.qd").write_text(dashboard_qd, encoding="utf-8")
+
+    (OUT_DIR / "dashboard.qd").write_text(dashboard_qd, encoding="utf-8")
 
     print("Analysis finished.")
