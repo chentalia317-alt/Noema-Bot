@@ -52,13 +52,20 @@ jobs:
         id: file
         shell: bash
         run: |
-          FILE_INPUT="${{ github.event_name == 'workflow_dispatch' && inputs.file || '' }}"
-          if [ -z "$FILE_INPUT" ] && [ "${{ github.event_name }}" = "issue_comment" ]; then
-            RAW="${{ github.event.comment.body }}"
-            FILE_INPUT=$(echo "$RAW" | sed -n 's/.*file=\([A-Za-z0-9._\/-]\+\).*/\1/p')
+          set -euo pipefail
+          IFS=$'\n\t'
+
+          FILE_INPUT=""
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          FILE_INPUT="${{ inputs.file || '' }}"
+          elif [ "${{ github.event_name }}" = "issue_comment" ]; then
+          RAW="${{ github.event.comment.body }}"
+     
+          FILE_INPUT="$(printf '%s' "$RAW" | sed -n 's/.*file=\([A-Za-z0-9._\/-]\+\).*/\1/p' || true)"
           fi
-          echo "value=$FILE_INPUT" >> "$GITHUB_OUTPUT"
+
           echo "Resolved FILE: ${FILE_INPUT:-<ALL>}"
+          printf 'value=%s\n' "$FILE_INPUT" >> "$GITHUB_OUTPUT"
 
       - name: Run analysis
         env:
@@ -67,12 +74,18 @@ jobs:
 
       - name: Read summary (install jq)
         id: summary
+        shell: bash
         run: |
-          sudo apt-get update && sudo apt-get install -y jq
-          MD=$(cat report_summary.json | jq -r '.markdown')
-          echo "md<<EOF" >> $GITHUB_OUTPUT
-          echo "$MD" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          set -euo pipefail
+          sudo apt-get update -y
+          sudo apt-get install -y jq
+          MD="$(jq -r '.markdown' report_summary.json)"
+
+          {
+            echo 'md<<__MD__'
+            printf '%s\n' "$MD"
+            echo '__MD__'
+          } >> "$GITHUB_OUTPUT"
 
       # ---- Quarkdown rendering（needs Java 17+）----
       - name: Set up Java 17
