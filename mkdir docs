@@ -1,14 +1,17 @@
 2025-10-28 Progress Log
 Today's Focus: Worked mainly on debugging the analysis flow 
-Tried to make the bot handle multiple data tables at once, but the thumbnails didn’t render yet.  
-Planning to add automatic column detection for each table to generate plots dynamically.  
-Also noticed Quarkdown still outputs everything under “Untitled-Quarkdown-Document,” which makes the path messy.  
-Might fix it later by adding a title argument or manually renaming the output folder.
-
+- Integrated full report + dashboard generation (noema-report.qd, dashboard.qd).
+- Fixed missing .qd path in GitHub Actions (./reports/...).
+- Added dashboard HTML card layout, but Quarkdown rendered it as plain text → needs .allowhtml {true}.
+- Later runs failed at Resolve FILE due to debug output polluting $GITHUB_OUTPUT (multi-line text interpreted as commands).
+- Root cause: unsafe string expansion in workflow; not Python logic.
 Next steps:
-- Get multi-table thumbnails to render properly  
-- Test the column detection logic  
-- Clean up the HTML output path
-
+1. Clean and stabilize workflow:
+Replace Resolve FILE and Read summary with safe output versions.
+Re-run /analyze to confirm pipeline stability.
+2. Fix dashboard rendering:
+Add .allowhtml {true} correctly at top of dashboard.qd.
+Verify Quarkdown compiles cards properly.
+3. Finalize the report → ensure both /index.html (dashboard) and /report.html display cleanly.
 
 
