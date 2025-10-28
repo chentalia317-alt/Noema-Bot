@@ -86,6 +86,11 @@ jobs:
           curl -fsSL https://raw.githubusercontent.com/quarkdown-labs/get-quarkdown/refs/heads/main/install.sh | sudo env "PATH=$PATH" bash
           quarkdown --version || true
 
+            - name: Verify outputs exist
+        run: |
+          echo "== repo root ==" && ls -la
+          echo "== reports dir ==" && ls -la reports || true
+
       - name: Compile .qd to HTML (dashboard & full report)
         run: |
           set -e
@@ -97,7 +102,7 @@ jobs:
             if [ -f reports/index.html ]; then
               mv reports/index.html reports/report.html
             else
-            FULL_DIR=$(find reports -maxdepth 2 -type f -name index.html -printf '%h\n' | head -n1)
+              FULL_DIR=$(find reports -maxdepth 2 -type f -name index.html -printf '%h\n' | head -n1)
               if [ -n "$FULL_DIR" ] && [ "$FULL_DIR" != "reports" ]; then
                 mv "$FULL_DIR/index.html" reports/report.html
                 [ -d "$FULL_DIR/script" ] && cp -r "$FULL_DIR/script" reports/
@@ -110,7 +115,7 @@ jobs:
             exit 1
           fi
 
-          # 2) complile dashboard（dashboard.qd), put into reports/index.html
+          # 2) complile dashboard（dashboard.qd), put into reports/index.html）
           if [ -f reports/dashboard.qd ]; then
             quarkdown c reports/dashboard.qd -o reports
             if [ ! -f reports/index.html ]; then
@@ -126,11 +131,10 @@ jobs:
             echo "dashboard.qd not found under reports/, fallback to report.html as index"
             cp -f reports/report.html reports/index.html
           fi
-          
-          touch reports/.nojekyll
 
-          echo "== reports tree =="
-          ls -Rla reports
+          touch reports/.nojekyll
+          echo "== final reports tree ==" && ls -Rla reports
+
           
       - name: List built files (recursive)
         run: |
