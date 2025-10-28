@@ -14,7 +14,13 @@ permissions:
   contents: write
   issues: write
   pull-requests: write
+  pages: write
+  id-token: write
 
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+  
 jobs:
   run:
     if: >
@@ -78,7 +84,7 @@ jobs:
       - name: Install Quarkdown CLI
         run: |
           curl -fsSL https://raw.githubusercontent.com/quarkdown-labs/get-quarkdown/refs/heads/main/install.sh | sudo env "PATH=$PATH" bash
-          quarkdown --version || ture
+          quarkdown --version || true
 
       - name: Compile .qd to HTML
         run: |
@@ -93,6 +99,14 @@ jobs:
           git add reports/ report_summary.json noema-report.qd
           git commit -m "chore: update analysis artifacts [skip ci]" || echo "no changes"
           git push
+
+      - name: Upload artifact (reports/)
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: reports
+
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4
 
       - name: Comment back as Noema-Bot
         if: ${{ github.event_name == 'issue_comment' }}
