@@ -196,41 +196,41 @@ def main():
 
 {report_md}
 """)
-
     Path("noema-report.qd").write_text(qd, encoding="utf-8")
-    print("Analysis finished.")
 
-    # 2025-10-28
     # === Build a simple dashboard (multi-dataset index) ===
-    # Collect the summaries of each dataset and select the first figure as the thumbnail.
+    # generating slug
+    def _slugify(filename: str) -> str:
+        return re.sub(r'[^A-Za-z0-9_.-]+', '', filename).replace(' ', '')
+
     cards = []
     for item in outputs:
         data_name = Path(item["data_file"]).name
-        # first graph as thumbnail（may be empty）
+        slug = _slugify(Path(item["data_file"]).stem)  # 如 baseline_cleaned_v7
         thumb = next((p for p in item["plots"] if p.endswith(".png")), "")
-        # card row（better style control with HTML / pure Markdown table)）
-        line = f"""
+        card_html = f"""
 <div style="display:flex;gap:16px;align-items:center;margin:12px 0;padding:12px;border:1px solid #333;border-radius:12px;">
   {'<img src="'+thumb+'" alt="thumb" style="width:120px;height:auto;border-radius:8px;">' if thumb else ''}
   <div>
     <div style="font-weight:700;font-size:18px">{data_name}</div>
     <div style="opacity:.8">Summary: <code>{Path(item['summary_csv']).name}</code></div>
-    <div style="margin-top:8px"><a href="report.html">Open full report →</a></div>
+    <div style="margin-top:8px"><a href="report.html#{slug}">Open full report →</a></div>
   </div>
 </div>
 """.strip()
-        cards.append(line)
+        cards.append(card_html)
 
-    from textwrap import dedent
     dashboard_qd = dedent(f"""\
 .docname {{Noema-Bot Dashboard}}
 .doctype {{plain}}
 .theme {{darko}}
 
-# Report Index
+# 🧭 Report Index
 
-> This dashboard lists all analyzed datasets. Click *Open full report* to view details.
+> This dashboard lists all analyzed datasets. Click *Open full report* to jump into the full analysis.
 
 {chr(10).join(cards) if cards else "_No datasets found._"}
 """)
     Path("dashboard.qd").write_text(dashboard_qd, encoding="utf-8")
+
+    print("Analysis finished.")
