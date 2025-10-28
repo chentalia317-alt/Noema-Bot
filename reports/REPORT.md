@@ -6,6 +6,6 @@
 - summary: `reports/baseline_cleaned_v7_summary.csv`
 
 #### Distributions
-![](../baseline_cleaned_v7_kss_morning_hist.png)
-![](../baseline_cleaned_v7_kss_afternoon_hist.png)
-![](../baseline_cleaned_v7_kss_evening_hist.png)
+![](baseline_cleaned_v7_kss_morning_hist.png)
+![](baseline_cleaned_v7_kss_afternoon_hist.png)
+![](baseline_cleaned_v7_kss_evening_hist.png)
