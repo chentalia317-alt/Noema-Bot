@@ -202,4 +202,37 @@ def main():
 
 if __name__ == "__main__":
     main()
+    # 2025-10-28
+    # === Build a simple dashboard (multi-dataset index) ===
+    # Collect the summaries of each dataset and select the first figure as the thumbnail.
+    cards = []
+    for item in outputs:
+        data_name = Path(item["data_file"]).name
+        # first graph as thumbnail（may be empty）
+        thumb = next((p for p in item["plots"] if p.endswith(".png")), "")
+        # card row（better style control with HTML / pure Markdown table)）
+        line = f"""
+<div style="display:flex;gap:16px;align-items:center;margin:12px 0;padding:12px;border:1px solid #333;border-radius:12px;">
+  {'<img src="'+thumb+'" alt="thumb" style="width:120px;height:auto;border-radius:8px;">' if thumb else ''}
+  <div>
+    <div style="font-weight:700;font-size:18px">{data_name}</div>
+    <div style="opacity:.8">Summary: <code>{Path(item['summary_csv']).name}</code></div>
+    <div style="margin-top:8px"><a href="report.html">Open full report →</a></div>
+  </div>
+</div>
+""".strip()
+        cards.append(line)
 
+    from textwrap import dedent
+    dashboard_qd = dedent(f"""\
+.docname {{Noema-Bot Dashboard}}
+.doctype {{plain}}
+.theme {{darko}}
+
+# Report Index
+
+> This dashboard lists all analyzed datasets. Click *Open full report* to view details.
+
+{chr(10).join(cards) if cards else "_No datasets found._"}
+""")
+    Path("dashboard.qd").write_text(dashboard_qd, encoding="utf-8")
