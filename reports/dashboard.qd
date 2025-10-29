@@ -1,25 +1,15 @@
 .docname {Noema-Bot Dashboard}
 .doctype {plain}
 .theme {darko}
-.allowhtml {true}
 
-# 🧭 Report Index
+# Report Index
 
-> This dashboard lists all analyzed datasets. Click *Open full report* to jump into the full analysis.
+This dashboard lists all analyzed datasets. Click *Open full report* to jump into the full analysis.
 
-<div style="display:flex;gap:16px;align-items:center;margin:12px 0;padding:12px;border:1px solid #333;border-radius:12px;">
-  <img src="baseline_cleaned_v7_kss_morning_hist.png" alt="thumb" style="width:120px;height:auto;border-radius:8px;">
-  <div>
-    <div style="font-weight:700;font-size:18px">baseline_cleaned_v7.csv</div>
-    <div style="opacity:.8">Summary: <code>baseline_cleaned_v7_summary.csv</code></div>
-    <div style="margin-top:8px"><a href="report.html#baseline_cleaned_v7">Open full report →</a></div>
-  </div>
-</div>
-<div style="display:flex;gap:16px;align-items:center;margin:12px 0;padding:12px;border:1px solid #333;border-radius:12px;">
-  <img src="intervention_B_cleaned_kss_morning_hist.png" alt="thumb" style="width:120px;height:auto;border-radius:8px;">
-  <div>
-    <div style="font-weight:700;font-size:18px">intervention_B_cleaned.csv</div>
-    <div style="opacity:.8">Summary: <code>intervention_B_cleaned_summary.csv</code></div>
-    <div style="margin-top:8px"><a href="report.html#intervention_B_cleaned">Open full report →</a></div>
-  </div>
-</div>
+### intervention_B_cleaned.csv
+
+Summary: `intervention_B_cleaned_summary.csv`
+
+[Open full report →](report.html#intervention_B_cleaned)
+
+![](intervention_B_cleaned_kss_morning_hist.png)
