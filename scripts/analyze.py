@@ -202,46 +202,40 @@ def main():
     (OUT_DIR / "noema-report.qd").write_text(qd, encoding="utf-8")
     print("Writing QD to:", (OUT_DIR / "noema-report.qd"))
 
-    # === Build a simple dashboard (multi-dataset index) ===
-    # generating slug
-    def _slugify(filename: str) -> str:
-        return re.sub(r'[^A-Za-z0-9_.-]+', '', filename).replace(' ', '')
+    # === Build a simple dashboard (Markdown-only, no raw HTML) ===
+def _slugify_anchor(name: str) -> str:
+    return re.sub(r'[^A-Za-z0-9_-]+', '_', name).strip('_')
 
-    cards = []
-    for item in outputs:
-        data_name = Path(item["data_file"]).name
-        slug = _slugify(Path(item["data_file"]).stem)  # 如 baseline_cleaned_v7
-        thumb = next((p for p in item["plots"] if p.endswith(".png")), "")
-        card_html = f"""
-<div style="display:flex;gap:16px;align-items:center;margin:12px 0;padding:12px;border:1px solid #333;border-radius:12px;">
-  {'<img src="'+thumb+'" alt="thumb" style="width:120px;height:auto;border-radius:8px;">' if thumb else ''}
-  <div>
-    <div style="font-weight:700;font-size:18px">{data_name}</div>
-    <div style="opacity:.8">Summary: <code>{Path(item['summary_csv']).name}</code></div>
-    <div style="margin-top:8px"><a href="report.html#{slug}">Open full report →</a></div>
-  </div>
-</div>
-""".strip()
-        cards.append(card_html)
+cards = []
+for item in outputs:
+    data_name = Path(item["data_file"]).name
+    anchor = _slugify_anchor(Path(item["data_file"]).stem)  # 对应报告里的 ### 标题
+    thumb = next((p for p in item["plots"] if p.endswith(".png")), "")
 
-    from textwrap import dedent
+    md = [
+        f"### {data_name}",
+        f"Summary: `{Path(item['summary_csv']).name}`",
+        f"[Open full report →](report.html#{anchor})"
+    ]
+    if thumb:
+        md.append(f"![]({thumb})")
+    cards.append("\n\n".join(md))
 
-    dashboard_qd = dedent(f"""\
+from textwrap import dedent
+dashboard_qd = dedent(f"""\
 .docname {{Noema-Bot Dashboard}}
 .doctype {{plain}}
 .theme {{darko}}
-.allowhtml {{true}}
 
-# 🧭 Report Index
+# Report Index
 
-> This dashboard lists all analyzed datasets. Click *Open full report* to jump into the full analysis.
+This dashboard lists all analyzed datasets. Click *Open full report* to jump into the full analysis.
 
 {chr(10).join(cards) if cards else "_No datasets found._"}
 """)
 
-
-    (OUT_DIR / "dashboard.qd").write_text(dashboard_qd, encoding="utf-8")
-    print("Writing QD to:", (OUT_DIR / "dashboard.qd"))
+(OUT_DIR / "dashboard.qd").write_text(dashboard_qd, encoding="utf-8")
+print("Writing QD to:", (OUT_DIR / "dashboard.qd"))
 
     print("Analysis finished.")
     print("== DEBUG FILE CHECK ==")
