@@ -216,7 +216,7 @@ for item in outputs:
         f"### {data_name}",
         f"Summary: `{Path(item['summary_csv']).name}`",
         f"[Open full report →](report.html#{anchor})"
-    ]
+        ]
     if thumb:
         md.append(f"![]({thumb})")
     cards.append("\n\n".join(md))
@@ -234,8 +234,8 @@ This dashboard lists all analyzed datasets. Click *Open full report* to jump int
 {chr(10).join(cards) if cards else "_No datasets found._"}
 """)
 
-(OUT_DIR / "dashboard.qd").write_text(dashboard_qd, encoding="utf-8")
-print("Writing QD to:", (OUT_DIR / "dashboard.qd"))
+    (OUT_DIR / "dashboard.qd").write_text(dashboard_qd, encoding="utf-8")
+    print("Writing QD to:", (OUT_DIR / "dashboard.qd"))
 
     print("Analysis finished.")
     print("== DEBUG FILE CHECK ==")
