@@ -14,4 +14,7 @@ Add .allowhtml {true} correctly at top of dashboard.qd.
 Verify Quarkdown compiles cards properly.
 3. Finalize the report → ensure both /index.html (dashboard) and /report.html display cleanly.
 
-
+2025-10-29 Progress Log
+fix distribution (WIP)
+fix integrated full report-but only one data/ occurred on html.
+delete .allowthml {true}
