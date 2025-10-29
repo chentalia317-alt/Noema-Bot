@@ -203,14 +203,14 @@ def main():
     print("Writing QD to:", (OUT_DIR / "noema-report.qd"))
 
     # === Build a simple dashboard (Markdown-only, no raw HTML) ===
-def _slugify_anchor(name: str) -> str:
-    return re.sub(r'[^A-Za-z0-9_-]+', '_', name).strip('_')
+    def _slugify_anchor(name: str) -> str:
+        return re.sub(r'[^A-Za-z0-9_-]+', '_', name).strip('_')
 
-cards = []
-for item in outputs:
-    data_name = Path(item["data_file"]).name
-    anchor = _slugify_anchor(Path(item["data_file"]).stem)  # 对应报告里的 ### 标题
-    thumb = next((p for p in item["plots"] if p.endswith(".png")), "")
+    cards = []
+    for item in outputs:
+        data_name = Path(item["data_file"]).name
+        anchor = _slugify_anchor(Path(item["data_file"]).stem)  # 对应报告里的 ### 标题
+        thumb = next((p for p in item["plots"] if p.endswith(".png")), "")
 
     md = [
         f"### {data_name}",
@@ -221,8 +221,7 @@ for item in outputs:
         md.append(f"![]({thumb})")
     cards.append("\n\n".join(md))
 
-from textwrap import dedent
-dashboard_qd = dedent(f"""\
+    dashboard_qd = dedent(f"""\
 .docname {{Noema-Bot Dashboard}}
 .doctype {{plain}}
 .theme {{darko}}
