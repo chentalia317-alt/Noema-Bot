@@ -204,39 +204,46 @@ def main():
     print("Writing QD to:", (OUT_DIR / "noema-report.qd"))
 
     # === Build a simple dashboard (Markdown-only, no raw HTML) ===
-def _slugify_anchor(name: str) -> str:
-    return re.sub(r'[^A-Za-z0-9_-]+', '_', name).strip('_')
-    
-lines = [
-    f"### {fp.name} {{#{_slugify_anchor(fp.stem)}}}",  
-    f"- rows: **{df.shape[0]}**, cols: **{df.shape[1]}**",
-    f"- numeric columns: `{', '.join(cols)}`",
-    f"- summary: `reports/{summary_csv.name}`",
-    "",
-    "#### Distributions",
-]
+    def _slugify_anchor(name: str) -> str:
+        import re
+        return re.sub(r'[^A-Za-z0-9_-]+', '_', name).strip('_')
 
-if p.endswith(".png"):
-    lines.append(f"![](./{p})")
-else:
-    lines.append(f"- {p}")
     
-cards = []
-for item in outputs:
-    data_name = Path(item["data_file"]).name
-    anchor = _slugify_anchor(Path(item["data_file"]).stem)
-    thumb = next((p for p in item["plots"] if p.endswith(".png")), "")
-
-    md = [
-        f"### {data_name}",
-        f"Summary: `{Path(item['summary_csv']).name}`",
-        f"[Open full report →](report.html#{anchor})"
+    # Report (adding the numeric columns + anchor for cross-link)
+    anchor = _slugify_anchor(fp.stem)
+    lines = [
+        f"### {fp.name} {{#{anchor}}}",
+        f"- rows: **{df.shape[0]}**, cols: **{df.shape[1]}**",
+        f"- numeric columns: `{', '.join(cols)}`",
+        f"- summary: `reports/{summary_csv.name}`",
+        "",
+        "#### Distributions",
     ]
-    if thumb:
-        md.append(f"![](./{thumb})")  
-    cards.append("\n\n".join(md))
+    for p in pngs:
+        if p.endswith(".png"):
+            # png 与 report.html 在同一目录（reports/），相对路径必须加 ./ 才稳
+            lines.append(f"![](./{p})")
+        else:
+            lines.append(f"- {p}")
 
-dashboard_qd = dedent(f"""\
+     # === Build a simple dashboard (Markdown-only, no raw HTML) ===
+    cards = []
+    for item in outputs:
+        data_name = Path(item["data_file"]).name
+        anchor = _slugify_anchor(Path(item["data_file"]).stem)  # 对应 report.html 里的 ### 标题
+        thumb = next((p for p in item["plots"] if p.endswith(".png")), "")
+
+        md = [
+            f"### {data_name}",
+            f"Summary: `{Path(item['summary_csv']).name}`",
+            f"[Open full report →](report.html#{anchor})"
+        ]
+        if thumb:
+            md.append(f"![](./{thumb})")
+        cards.append("\n\n".join(md))
+
+    from textwrap import dedent
+    dashboard_qd = dedent(f"""\
 .docname {{Noema-Bot Dashboard}}
 .doctype {{plain}}
 .theme {{darko}}
@@ -247,8 +254,8 @@ This dashboard lists all analyzed datasets. Click *Open full report* to jump int
 
 {chr(10).join(cards) if cards else "_No datasets found._"}
 """)
-(OUT_DIR / "dashboard.qd").write_text(dashboard_qd, encoding="utf-8")
-print("Writing QD to:", (OUT_DIR / "dashboard.qd"))
+    (OUT_DIR / "dashboard.qd").write_text(dashboard_qd, encoding="utf-8")
+    print("Writing QD to:", (OUT_DIR / "dashboard.qd"))
 
     print("Analysis finished.")
     print("== DEBUG FILE CHECK ==")
@@ -257,6 +264,7 @@ print("Writing QD to:", (OUT_DIR / "dashboard.qd"))
     print("== OUT_DIR contents ==")
     for f in OUT_DIR.iterdir():
         print(" -", f)
+
         
 if __name__ == "__main__":
     main()
