@@ -132,7 +132,7 @@ def analyze_one(fp: Path, n_limit: int | None = None) -> dict:
     ]
     for p in pngs:
         if p.endswith(".png"):
-            lines.append(f"![]({p})")
+            lines.append(f"![](./{p})")
         else:
             lines.append(f"- {p}")
 
@@ -168,6 +168,7 @@ def main():
         print(note)
         Path("report_summary.json").write_text(json.dumps({"markdown": note}, ensure_ascii=False), encoding="utf-8")
         return
+    print("Targets:", [str(p) for p in targets])
 
     blocks = ["## 🧪 Auto Analysis Report"]
     outputs = []
@@ -203,38 +204,51 @@ def main():
     print("Writing QD to:", (OUT_DIR / "noema-report.qd"))
 
     # === Build a simple dashboard (Markdown-only, no raw HTML) ===
-    def _slugify_anchor(name: str) -> str:
-        return re.sub(r'[^A-Za-z0-9_-]+', '_', name).strip('_')
+def _slugify_anchor(name: str) -> str:
+    return re.sub(r'[^A-Za-z0-9_-]+', '_', name).strip('_')
+    
+lines = [
+    f"### {fp.name} {{#{_slugify_anchor(fp.stem)}}}",  
+    f"- rows: **{df.shape[0]}**, cols: **{df.shape[1]}**",
+    f"- numeric columns: `{', '.join(cols)}`",
+    f"- summary: `reports/{summary_csv.name}`",
+    "",
+    "#### Distributions",
+]
 
-    cards = []
-    for item in outputs:
-        data_name = Path(item["data_file"]).name
-        anchor = _slugify_anchor(Path(item["data_file"]).stem)  # 对应报告里的 ### 标题
-        thumb = next((p for p in item["plots"] if p.endswith(".png")), "")
+if p.endswith(".png"):
+    lines.append(f"![](./{p})")
+else:
+    lines.append(f"- {p}")
+    
+cards = []
+for item in outputs:
+    data_name = Path(item["data_file"]).name
+    anchor = _slugify_anchor(Path(item["data_file"]).stem)
+    thumb = next((p for p in item["plots"] if p.endswith(".png")), "")
 
     md = [
         f"### {data_name}",
         f"Summary: `{Path(item['summary_csv']).name}`",
         f"[Open full report →](report.html#{anchor})"
-        ]
+    ]
     if thumb:
-        md.append(f"![]({thumb})")
+        md.append(f"![](./{thumb})")  
     cards.append("\n\n".join(md))
 
-    dashboard_qd = dedent(f"""\
+dashboard_qd = dedent(f"""\
 .docname {{Noema-Bot Dashboard}}
 .doctype {{plain}}
 .theme {{darko}}
 
-# Report Index
+# 🧭 Report Index
 
 This dashboard lists all analyzed datasets. Click *Open full report* to jump into the full analysis.
 
 {chr(10).join(cards) if cards else "_No datasets found._"}
 """)
-
-    (OUT_DIR / "dashboard.qd").write_text(dashboard_qd, encoding="utf-8")
-    print("Writing QD to:", (OUT_DIR / "dashboard.qd"))
+(OUT_DIR / "dashboard.qd").write_text(dashboard_qd, encoding="utf-8")
+print("Writing QD to:", (OUT_DIR / "dashboard.qd"))
 
     print("Analysis finished.")
     print("== DEBUG FILE CHECK ==")
