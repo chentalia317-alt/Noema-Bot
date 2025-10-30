@@ -11,8 +11,12 @@ This dashboard lists all analyzed datasets. Click *Open full report* to jump int
 Summary: baseline_cleaned_v7_summary.csv
 
 [Open full report →](reports/report.html#baselinecleanedv7csv)
+
+![](./reports/baseline_cleaned_v7_kss_morning_hist.png)
 ### intervention_B_cleaned.csv
 
 Summary: intervention_B_cleaned_summary.csv
 
 [Open full report →](reports/report.html#interventionbcleanedcsv)
+
+![](./reports/intervention_B_cleaned_kss_morning_hist.png)
