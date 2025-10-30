@@ -148,7 +148,7 @@ def analyze_one(fp: Path, n_limit: int | None = None) -> dict:
         "#### Distributions",
     ]
     for name in png_names:
-    lines.append(f"![](./reports/{name})")        
+        lines.append(f"![](./reports/{name})")        
 
     res = {
         "data_file": str(fp),
