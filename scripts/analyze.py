@@ -137,7 +137,7 @@ def analyze_one(fp: Path, n_limit: int | None = None) -> dict:
             lines.append(f"- {p}")
     # === Report (add numeric columns + anchor for cross-link) ===
     summary_csv_name = Path(summary_csv).name
-    png_names = [Path(p).name for p in pngs]  # 只取文件名
+    png_names = [Path(p).name for p in pngs]  
 
     lines = [
         f"### {fp.name}",
@@ -151,10 +151,10 @@ def analyze_one(fp: Path, n_limit: int | None = None) -> dict:
     lines.append(f"![](./reports/{name})")        
 
     res = {
-    "data_file": str(fp),
-    "summary_csv": str(summary_csv),           
-    "plots": [str(p) for p in pngs],
-    "report_md": "\n".join(lines),
+        "data_file": str(fp),
+        "summary_csv": str(summary_csv),           
+        "plots": [str(p) for p in pngs],
+        "report_md": "\n".join(lines),
     }
     return res
 
