@@ -255,33 +255,41 @@ def main():
 
 
 # --- helpers (top-level, no indent!) ---
-
 def _qd_anchor_from_heading(text: str) -> str:
     import re
     return re.sub(r'[^a-z0-9]+', '', text.lower())
 
-
 def build_dashboard(outputs: list) -> str:
+    from pathlib import Path
     from textwrap import dedent
+
     cards = []
     for item in outputs:
         try:
             data_name = Path(item["data_file"]).name
-            anchor = _qd_anchor_from_heading(data_name)
-            link = f"[Open full report →](reports/report.html#{anchor})"
+            anchor = _qd_anchor_from_heading(data_name)   # 与 Quarkdown 标题锚点一致
+            link = f"[Open full report →](report.html#{anchor})"   # report.html 在根目录时用这条
 
-            thumb = next((Path(p).name for p in item.get("plots", []) if str(p).lower().endswith(".png")), "")
+            thumb = next(
+                (Path(p).name for p in item.get("plots", []) if str(p).lower().endswith(".png")),
+                ""
+            )
+
             md = [
                 f"### {data_name}",
                 f"Summary: {Path(item.get('summary_csv','')).name}" if item.get("summary_csv") else "_No summary table._",
                 link,
             ]
             if thumb:
+                # index.html 在根，缩略图在 reports/ 下
                 md.append(f"![](./reports/{thumb})")
+
             cards.append("\n\n".join(md))
-        except Exception:
+
+        except Exception as e:
+            cards.append(f"- _Dashboard item failed for **{item.get('data_file','?')}** — {type(e).__name__}: {e}_")
             continue
-            
+
     return dedent(f"""\
 .docname {{Noema-Bot Dashboard}}
 .doctype {{plain}}
@@ -291,7 +299,7 @@ def build_dashboard(outputs: list) -> str:
 
 This dashboard lists all analyzed datasets. Click *Open full report* to jump into the full analysis.
 
-{chr(10).join(cards) if cards else "_No datasets found._"}
+{'\n'.join(cards) if cards else "_No datasets found._"}
 """)
     return dashboard_qd
 
