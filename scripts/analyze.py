@@ -143,12 +143,12 @@ def analyze_one(fp: Path, n_limit: int | None = None) -> dict:
         f"### {fp.name}",
         f"- rows: **{df.shape[0]}**, cols: **{df.shape[1]}**",
         f"- numeric columns: `{', '.join(cols)}`",
-        f"- summary: reports/{summary_csv_name}",     
+        f"- summary: {summary_csv_name}",     
         "",
         "#### Distributions",
     ]
     for name in png_names:
-        lines.append(f"![](./reports/{name})")        
+        lines.append(f"![](./{name})")        
 
     res = {
         "data_file": str(fp),
@@ -255,7 +255,7 @@ def build_dashboard(outputs: list) -> str:
         try:
             data_name = Path(item["data_file"]).name
             anchor = _qd_anchor_from_heading(data_name)
-            link = f"[Open full report →](report.html#{anchor})"
+            link = f"[Open full report →](reports/report.html#{anchor})"
 
             thumb = next((Path(p).name for p in item.get("plots", []) if str(p).lower().endswith(".png")), "")
             md = [
