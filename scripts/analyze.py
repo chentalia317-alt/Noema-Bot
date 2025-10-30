@@ -111,20 +111,19 @@ def analyze_one(fp: Path, n_limit: int | None = None) -> dict:
     if not cols:
         print(f"[WARN] {fp.name}: no analyzable numeric columns after filtering.")
 
-    # === Draw histograms ===
+    # === Draw histograms (files -> reports/*.png) ===
     pngs = []
     for col in cols:
         out_png = OUT_DIR / f"{name}_{col}_hist.png"
         try:
-            plot_hist(df, col, out_png)
-            pngs.append(out_png.name)   
+            plot_hist(df, col, out_png)   
+            pngs.append(out_png.name)       
         except Exception as e:
             pngs.append(f"(failed: {col} -> {e})")
 
-    # === Build markdown report ===
-    import os
-    import pandas as pd
+    # === Build markdown (report.html -root；resource- reports/) ===
     from pathlib import Path
+    import os, pandas as pd
 
     SHOW_SUMMARY_PREVIEW = os.getenv("SHOW_SUMMARY", "0") == "1"
     summary_csv_name = Path(summary_csv).name
@@ -133,16 +132,18 @@ def analyze_one(fp: Path, n_limit: int | None = None) -> dict:
         f"### {fp.name}",
         f"- rows: **{df.shape[0]}**, cols: **{df.shape[1]}**",
         f"- numeric columns: `{', '.join(cols) if cols else '—'}`",
-        f"- summary: [{summary_csv_name}](./{summary_csv_name})",
+        # summary 超链接（根/report.html 相对到 /reports/）
+        f"- summary: [reports/{summary_csv_name}](./reports/{summary_csv_name})",
         "",
         "#### Distributions",
     ]
 
+
     for name in pngs:
         if str(name).endswith(".png"):
-            lines.append(f"![](./{name})")
+            lines.append(f"![](./reports/{name})")  # report.html -> ./reports/xxx.png
         else:
-            lines.append(f"- {name}")
+            lines.append(f"- {name}")              
 
     # Optional: Folded summary preview
     if SHOW_SUMMARY_PREVIEW:
