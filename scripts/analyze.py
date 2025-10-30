@@ -292,13 +292,13 @@ def build_dashboard(outputs: list) -> str:
 .doctype {{plain}}
 .theme {{darko}}
 
-# 🧭 Report Index
+    # 🧭 Report Index
 
-This dashboard lists all analyzed datasets. Click *Open full report* to jump into the full analysis.
+    This dashboard lists all analyzed datasets. Click *Open full report* to jump into the full analysis.
 
-{'\n'.join(cards) if cards else "_No datasets found._"}
-""")
-    return dashboard_qd
+    {'\n'.join(cards) if cards else "_No datasets found._"}
+    """)
+        return dashboard_qd
 
 
 if __name__ == "__main__":
