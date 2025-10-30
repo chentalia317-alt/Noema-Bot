@@ -104,62 +104,68 @@ jobs:
           echo "== repo root ==" && ls -la
           echo "== reports dir ==" && ls -la reports || true
 
-
       - name: Compile .qd to HTML (dashboard & full report)
+        shell: bash
         run: |
-          set -e
+          set -Eeuo pipefail
           mkdir -p reports
-          
-          echo "== Checking reports dir =="
-          ls -la reports || echo "(no reports dir)"
-          
-          echo "== Checking QD files =="
-          find reports -type f -name "*.qd" || echo "(no .qd found)"
 
-          # 1) compile the main report (noema-report.qd)
-          if [ -f ./reports/noema-report.qd ]; then
-            echo "Found reports/noema-report.qd"
-            quarkdown c ./reports/noema-report.qd -o ./reports
-            if [ -f ./reports/index.html ]; then
-              mv ./reports/index.html ./reports/report.html
-            else
-              FULL_DIR=$(find ./reports -maxdepth 2 -type f -name index.html -printf '%h\n' | head -n1)
-              if [ -n "$FULL_DIR" ] && [ "$FULL_DIR" != "./reports" ]; then
-                mv "$FULL_DIR/index.html" ./reports/report.html
-                [ -d "$FULL_DIR/script" ] && cp -r "$FULL_DIR/script" ./reports/
-                [ -d "$FULL_DIR/theme" ] && cp -r "$FULL_DIR/theme" ./reports/
-                rm -rf "$FULL_DIR"
-              fi
-            fi
+          echo "== Checking for .qd files (root & reports/) =="
+          (ls -1 *.qd 2>/dev/null || true)
+          (ls -1 reports/*.qd 2>/dev/null || true)
+
+          if [[ -f ./noema-report.qd ]]; then
+            QD_MAIN=./noema-report.qd
+          elif [[ -f ./reports/noema-report.qd ]]; then
+            QD_MAIN=./reports/noema-report.qd
           else
-            echo "reports/noema-report.qd not found!"
-            echo "Listing current workspace:"
-            ls -Rla
-            exit 1
+            echo "::error ::noema-report.qd not found in repo root or reports/"; exit 1
           fi
 
-          # 2) compile dashboard (dashboard.qd)
-          if [ -f ./reports/dashboard.qd ]; then
-            echo "Found reports/dashboard.qd"
-            quarkdown c ./reports/dashboard.qd -o ./reports
-            if [ ! -f ./reports/index.html ]; then
-              DASH_DIR=$(find ./reports -maxdepth 2 -type f -name index.html -printf '%h\n' | head -n1)
-              if [ -n "$DASH_DIR" ] && [ "$DASH_DIR" != "./reports" ]; then
-                mv "$DASH_DIR/index.html" ./reports/index.html
-                [ -d "$DASH_DIR/script" ] && cp -r "$DASH_DIR/script" ./reports/
-                [ -d "$DASH_DIR/theme" ] && cp -r "$DASH_DIR/theme" ./reports/
-                rm -rf "$DASH_DIR"
+          echo "🛠️ Compile main report: $QD_MAIN"
+          quarkdown c "$QD_MAIN" -o ./reports
+
+          if [[ -f ./reports/index.html ]]; then
+            :
+          else
+            SUBDIR="$(find ./reports -maxdepth 2 -type f -name index.html -printf '%h\n' | head -n1 || true)"
+            if [[ -n "${SUBDIR:-}" && "$SUBDIR" != "./reports" ]]; then
+              mv "$SUBDIR/index.html" ./reports/index.html
+              [[ -d "$SUBDIR/script" ]] && cp -r "$SUBDIR/script" ./reports/ || true
+              [[ -d "$SUBDIR/theme"  ]] && cp -r "$SUBDIR/theme"  ./reports/ || true
+              rm -rf "$SUBDIR"
+            fi
+          fi
+
+
+          [[ -f ./reports/index.html ]] && mv -f ./reports/index.html ./reports/report.html
+
+          # 选 dashboard.qd：优先根目录，其次 reports/；没有就用 report.html 兜底
+          if   [[ -f ./dashboard.qd ]]; then QD_DASH=./dashboard.qd
+          elif [[ -f ./reports/dashboard.qd ]]; then QD_DASH=./reports/dashboard.qd
+          else QD_DASH=""
+          fi
+
+          if [[ -n "$QD_DASH" ]]; then
+            echo "🛠️ Compile dashboard: $QD_DASH"
+            quarkdown c "$QD_DASH" -o ./reports
+            if [[ ! -f ./reports/index.html ]]; then
+              DDIR="$(find ./reports -maxdepth 2 -type f -name index.html -printf '%h\n' | head -n1 || true)"
+              if [[ -n "${DDIR:-}" && "$DDIR" != "./reports" ]]; then
+                mv "$DDIR/index.html" ./reports/index.html
+                [[ -d "$DDIR/script" ]] && cp -r "$DDIR/script" ./reports/ || true
+                [[ -d "$DDIR/theme"  ]] && cp -r "$DDIR/theme"  ./reports/ || true
+                rm -rf "$DDIR"
               fi
             fi
           else
-            echo "dashboard.qd not found, fallback to report.html as index"
+            echo "dashboard.qd not found → use report.html as index"
             cp -f ./reports/report.html ./reports/index.html
           fi
 
           touch ./reports/.nojekyll
           echo "== final reports tree =="
           ls -Rla ./reports
-
           
       - name: List built files (recursive)
         run: |
