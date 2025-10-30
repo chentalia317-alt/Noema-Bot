@@ -132,8 +132,7 @@ def analyze_one(fp: Path, n_limit: int | None = None) -> dict:
         f"### {fp.name}",
         f"- rows: **{df.shape[0]}**, cols: **{df.shape[1]}**",
         f"- numeric columns: `{', '.join(cols) if cols else '—'}`",
-        # summary 超链接（根/report.html 相对到 /reports/）
-        f"- summary: [reports/{summary_csv_name}](./reports/{summary_csv_name})",
+        f"- summary: [{summary_csv_name}](./{summary_csv_name})",
         "",
         "#### Distributions",
     ]
@@ -141,7 +140,7 @@ def analyze_one(fp: Path, n_limit: int | None = None) -> dict:
 
     for name in pngs:
         if str(name).endswith(".png"):
-            lines.append(f"![](./reports/{name})")  # report.html -> ./reports/xxx.png
+            lines.append(f"![](./{name})")  # report.html -> ./reports/xxx.png
         else:
             lines.append(f"- {name}")              
 
@@ -267,9 +266,8 @@ def build_dashboard(outputs: list) -> str:
     for item in outputs:
         try:
             data_name = Path(item["data_file"]).name
-            anchor = _qd_anchor_from_heading(data_name)   # 与 Quarkdown 标题锚点一致
-            link = f"[Open full report →](report.html#{anchor})"   # report.html 在根目录时用这条
-
+            anchor = _qd_anchor_from_heading(data_name)  
+            link = f"[Open full report →](reports/report.html#{anchor})"
             thumb = next(
                 (Path(p).name for p in item.get("plots", []) if str(p).lower().endswith(".png")),
                 ""
@@ -281,7 +279,6 @@ def build_dashboard(outputs: list) -> str:
                 link,
             ]
             if thumb:
-                # index.html 在根，缩略图在 reports/ 下
                 md.append(f"![](./reports/{thumb})")
 
             cards.append("\n\n".join(md))
