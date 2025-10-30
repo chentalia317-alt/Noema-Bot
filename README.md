@@ -96,3 +96,25 @@ In upcoming updates, the project aims to expand its analytical and rendering cap
 - **Web publishing** — direct rendering of Quarkdown reports to GitHub Pages or other static-site platforms.  
 
 The long-term goal is to turn **Noema-Bot** into a flexible, open-source and effective assistant for transparent and aesthetic scientific reporting🤩.
+---
+
+## 🤝 Collaboration & Contribution
+
+> *“Noema-Bot is not just a script — it’s a philosophy of open, reproducible, and aesthetic science.”*
+
+**Noema-Bot** is an evolving research assistant that connects data analysis, automation, and aesthetics.  
+It runs Python pipelines, analyzes datasets, and generates Quarkdown-based HTML reports — all designed to make open science more reproducible and beautiful.
+
+I’m currently looking for **collaborators or contributors** who share this vision and would like to grow the project together.
+
+### Possible Collaboration Areas
+- **Data analysis & visualization** — extending statistical modules, improving histogram/plot generation  
+- **Automation & reproducibility** — refining the GitHub Actions workflow, improving Quarkdown rendering  
+- **Front-end / design** — creating better dashboard layouts and visual templates  
+- **Documentation & outreach** — improving README guides, tutorials, or open-science communication  
+
+### How to contact
+- Fork this repository and open a pull request  
+- Or contact the maintainer: [@chentalia317-alt](https://github.com/chentalia317-alt)  
+  *(you can briefly describe your background or what you’d like to work on)*  
+
