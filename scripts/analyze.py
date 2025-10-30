@@ -135,6 +135,20 @@ def analyze_one(fp: Path, n_limit: int | None = None) -> dict:
             lines.append(f"![](./{p})")
         else:
             lines.append(f"- {p}")
+    # === Report (add numeric columns + anchor for cross-link) ===
+    summary_csv_name = Path(summary_csv).name
+    png_names = [Path(p).name for p in pngs]
+
+    lines = [
+    f"### {fp.name}",
+    f"- rows: **{df.shape[0]}**, cols: **{df.shape[1]}**",
+    f"- numeric columns: `{', '.join(cols)}`",
+    f"- summary: reports/{summary_csv_name}",
+    "",
+    "#### Distributions",
+    ]
+    for name in png_names:
+    lines.append(f"![](./reports/{name})")
 
     return {
         "data_file": str(fp),
@@ -228,16 +242,13 @@ def main():
 
 # --- helpers (top-level, no indent!) ---
 
-def _slugify_anchor(name: str) -> str:
+def _qd_anchor_from_heading(text: str) -> str:
     import re
-    return re.sub(r'[^A-Za-z0-9_-]+', '_', name).strip('_')
-
+    return re.sub(r'[^a-z0-9]+', '', text.lower())
 
 def build_dashboard(outputs: list) -> str:
-    
     from textwrap import dedent
     cards = []
-
     for item in outputs:
         try:
             data_name = Path(item["data_file"]).name
@@ -256,12 +267,10 @@ def build_dashboard(outputs: list) -> str:
             ]
             if thumb:
                 md_lines.append(f"![](./{thumb})")
-
             cards.append("\n\n".join(md_lines))
         except Exception as _:
             continue
-
-    dashboard_qd = dedent(f"""\
+    return dedent(f"""\
 .docname {{Noema-Bot Dashboard}}
 .doctype {{plain}}
 .theme {{darko}}
