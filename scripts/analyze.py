@@ -147,10 +147,10 @@ def main():
     # Supports optional single-file analysis, can be passed through the environment variable FILE=xxx.csv
     # 2025-10-28, adding --n
     parser = argparse.ArgumentParser()
-    parser.add_argument("--n", type=int, default=0, help="最多分析多少列；0 表示全部可分析列")
+    parser.add_argument("--n", type=int, default=0, help="Maximum number of columns to analyze；0 means all available numeric columns.")
     args, _ = parser.parse_known_args()
     n_limit = None if args.n == 0 else args.n
-    
+
     only = os.getenv("FILE", "").strip()
     targets = []
     if only:
@@ -161,35 +161,44 @@ def main():
             targets = [p]
 
     if not targets:
-        targets = [p for p in DATA_DIR.glob("**/*") if p.suffix.lower() in (".csv",".xls",".xlsx",".json")]
+        targets = [p for p in DATA_DIR.glob("**/*") if p.suffix.lower() in (".csv", ".xls", ".xlsx", ".json")]
 
     if not targets:
         note = "No data files in data/. Nothing to analyze."
         print(note)
         Path("report_summary.json").write_text(json.dumps({"markdown": note}, ensure_ascii=False), encoding="utf-8")
         return
+
+    targets = sorted(targets, key=lambda x: str(x))
     print("Targets:", [str(p) for p in targets])
 
     blocks = ["## 🧪 Auto Analysis Report"]
     outputs = []
     for fp in targets:
         try:
-            res = analyze_one(fp, n_limit=n_limit) #2025-10-28, adding n_limit
+            # inner analyze_one() generate summary_csv / plots，back report_md..
+            res = analyze_one(fp, n_limit=n_limit)  # 2025-10-28, adding n_limit
+            # Convert all Path to strings to ensure JSON serialization is possible.
+            res["data_file"] = str(res.get("data_file", fp))
+            if "summary_csv" in res:
+                res["summary_csv"] = str(res["summary_csv"])
+            if "plots" in res:
+                res["plots"] = [str(p) for p in res["plots"]]
             outputs.append(res)
             blocks.append(res["report_md"])
         except Exception as e:
             blocks.append(f"- **{fp.name}** ❌ {e}")
-            
+
     report_md = "\n\n".join(blocks)
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
     (OUT_DIR / "REPORT.md").write_text(report_md, encoding="utf-8")
     Path("report_summary.json").write_text(
         json.dumps({"markdown": report_md, "items": outputs}, ensure_ascii=False),
         encoding="utf-8"
     )
-    
+
     # 2025-10-28, generating Quarkdown (.qd)
     from textwrap import dedent
-
     qd = dedent(f"""\
 .docname {{Noema Report}}
 .doctype {{plain}}
@@ -203,57 +212,8 @@ def main():
     (OUT_DIR / "noema-report.qd").write_text(qd, encoding="utf-8")
     print("Writing QD to:", (OUT_DIR / "noema-report.qd"))
 
-    # === Build a simple dashboard (Markdown-only, no raw HTML) ===
-    def _slugify_anchor(name: str) -> str:
-        import re
-        return re.sub(r'[^A-Za-z0-9_-]+', '_', name).strip('_')
-
-    
-    # Report (adding the numeric columns + anchor for cross-link)
-    anchor = _slugify_anchor(fp.stem)
-    lines = [
-        f"### {fp.name} {{#{anchor}}}",
-        f"- rows: **{df.shape[0]}**, cols: **{df.shape[1]}**",
-        f"- numeric columns: `{', '.join(cols)}`",
-        f"- summary: `reports/{summary_csv.name}`",
-        "",
-        "#### Distributions",
-    ]
-    for p in pngs:
-        if p.endswith(".png"):
-            # png 与 report.html 在同一目录（reports/），相对路径必须加 ./ 才稳
-            lines.append(f"![](./{p})")
-        else:
-            lines.append(f"- {p}")
-
-     # === Build a simple dashboard (Markdown-only, no raw HTML) ===
-    cards = []
-    for item in outputs:
-        data_name = Path(item["data_file"]).name
-        anchor = _slugify_anchor(Path(item["data_file"]).stem)  # 对应 report.html 里的 ### 标题
-        thumb = next((p for p in item["plots"] if p.endswith(".png")), "")
-
-        md = [
-            f"### {data_name}",
-            f"Summary: `{Path(item['summary_csv']).name}`",
-            f"[Open full report →](report.html#{anchor})"
-        ]
-        if thumb:
-            md.append(f"![](./{thumb})")
-        cards.append("\n\n".join(md))
-
-    from textwrap import dedent
-    dashboard_qd = dedent(f"""\
-.docname {{Noema-Bot Dashboard}}
-.doctype {{plain}}
-.theme {{darko}}
-
-# 🧭 Report Index
-
-This dashboard lists all analyzed datasets. Click *Open full report* to jump into the full analysis.
-
-{chr(10).join(cards) if cards else "_No datasets found._"}
-""")
+    # generate Dashboard（from outputs）
+    dashboard_qd = build_dashboard(outputs)
     (OUT_DIR / "dashboard.qd").write_text(dashboard_qd, encoding="utf-8")
     print("Writing QD to:", (OUT_DIR / "dashboard.qd"))
 
@@ -265,6 +225,55 @@ This dashboard lists all analyzed datasets. Click *Open full report* to jump int
     for f in OUT_DIR.iterdir():
         print(" -", f)
 
-        
+
+# --- helpers (top-level, no indent!) ---
+
+def _slugify_anchor(name: str) -> str:
+    import re
+    return re.sub(r'[^A-Za-z0-9_-]+', '_', name).strip('_')
+
+
+def build_dashboard(outputs: list) -> str:
+    
+    from textwrap import dedent
+    cards = []
+
+    for item in outputs:
+        try:
+            data_name = Path(item["data_file"]).name
+            anchor = _slugify_anchor(Path(item["data_file"]).stem)  
+
+            thumb = ""
+            for p in item.get("plots", []):
+                if str(p).lower().endswith(".png"):
+                    thumb = Path(p).name 
+                    break
+
+            md_lines = [
+                f"### {data_name}",
+                f"Summary: `{Path(item.get('summary_csv', '')).name}`" if item.get("summary_csv") else "_No summary table._",
+                f"[Open full report →](index.html#{anchor})",
+            ]
+            if thumb:
+                md_lines.append(f"![](./{thumb})")
+
+            cards.append("\n\n".join(md_lines))
+        except Exception as _:
+            continue
+
+    dashboard_qd = dedent(f"""\
+.docname {{Noema-Bot Dashboard}}
+.doctype {{plain}}
+.theme {{darko}}
+
+# 🧭 Report Index
+
+This dashboard lists all analyzed datasets. Click *Open full report* to jump into the full analysis.
+
+{chr(10).join(cards) if cards else "_No datasets found._"}
+""")
+    return dashboard_qd
+
+
 if __name__ == "__main__":
     main()
