@@ -117,7 +117,7 @@ def analyze_one(fp: Path, n_limit: int | None = None) -> dict:
         out_png = OUT_DIR / f"{name}_{col}_hist.png"
         try:
             plot_hist(df, col, out_png)
-            pngs.append(Path(out_png).name)   # 只保存文件名
+            pngs.append(out_png.name)   
         except Exception as e:
             pngs.append(f"(failed: {col} -> {e})")
 
@@ -133,7 +133,6 @@ def analyze_one(fp: Path, n_limit: int | None = None) -> dict:
         f"### {fp.name}",
         f"- rows: **{df.shape[0]}**, cols: **{df.shape[1]}**",
         f"- numeric columns: `{', '.join(cols) if cols else '—'}`",
-        # 注意：report.html 与 CSV/PNG 在同一目录（reports/）→ 不要加前缀
         f"- summary: [{summary_csv_name}](./{summary_csv_name})",
         "",
         "#### Distributions",
