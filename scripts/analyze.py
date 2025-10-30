@@ -265,8 +265,9 @@ def build_dashboard(outputs: list) -> str:
     for item in outputs:
         try:
             data_name = Path(item["data_file"]).name
-            anchor = _qd_anchor_from_heading(data_name)  
-            link = f"[Open full report →](reports/report.html#{anchor})"
+            anchor = _qd_anchor_from_heading(data_name)
+            # from reports/index.html -> full report is reports/report.html (same dir), so use a relative link:
+            link = f"[Open full report →](./report.html#{anchor})"
 
             thumb = next(
                 (Path(p).name for p in item.get("plots", []) if str(p).lower().endswith(".png")),
@@ -279,10 +280,10 @@ def build_dashboard(outputs: list) -> str:
                 link,
             ]
             if thumb:
-                md.append(f"![](./reports/{thumb})")
+                # image is alongside index.html under /reports
+                md.append(f"![](./{thumb})")
 
             cards.append("\n\n".join(md))
-
         except Exception as e:
             cards.append(f"- _Dashboard item failed for **{item.get('data_file','?')}** — {type(e).__name__}: {e}_")
 
