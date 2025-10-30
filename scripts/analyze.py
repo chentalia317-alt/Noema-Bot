@@ -111,48 +111,63 @@ def analyze_one(fp: Path, n_limit: int | None = None) -> dict:
     if not cols:
         print(f"[WARN] {fp.name}: no analyzable numeric columns after filtering.")
 
-    #draw
+    # === Draw histograms ===
     pngs = []
     for col in cols:
         out_png = OUT_DIR / f"{name}_{col}_hist.png"
         try:
             plot_hist(df, col, out_png)
-            pngs.append(out_png.name)
+            pngs.append(out_png.name)   # 只保存文件名（因为 report.html 与 png 在同一目录）
         except Exception as e:
             pngs.append(f"(failed: {col} -> {e})")
-            
-    # Report (adding the numeric clumns: hint + more）
-    lines = [
-        f"### {fp.name}",
-        f"- rows: **{df.shape[0]}**, cols: **{df.shape[1]}**",
-        f"- numeric columns: `{', '.join(cols)}`",
-        f"- summary: `reports/{summary_csv.name}`",
-        "",
-        "#### Distributions",
-    ]
-    for p in pngs:
-        if p.endswith(".png"):
-            lines.append(f"![](./{p})")
-        else:
-            lines.append(f"- {p}")
-    # === Report (add numeric columns + anchor for cross-link) ===
+
+    # === Build markdown report ===
+    import os
+    import pandas as pd
+    from pathlib import Path
+
+    SHOW_SUMMARY_PREVIEW = os.getenv("SHOW_SUMMARY", "0") == "1"
     summary_csv_name = Path(summary_csv).name
-    png_names = [Path(p).name for p in pngs]  
+    png_names = [Path(p).name for p in pngs]
 
     lines = [
         f"### {fp.name}",
         f"- rows: **{df.shape[0]}**, cols: **{df.shape[1]}**",
-        f"- numeric columns: `{', '.join(cols)}`",
-        f"- summary: {summary_csv_name}",     
+        f"- numeric columns: `{', '.join(cols) if cols else '—'}`",
+        f"- summary: [{summary_csv_name}](./{summary_csv_name})",
         "",
         "#### Distributions",
     ]
-    for name in png_names:
-        lines.append(f"![](./{name})")        
 
+    # add histogram
+    for name in png_names:
+        if name.endswith(".png"):
+            lines.append(f"![](./{name})")
+        else:
+            lines.append(f"- {name}")
+
+    # ===optional:adding summary ===
+    if SHOW_SUMMARY_PREVIEW:
+        try:
+            _df_preview = pd.read_csv(summary_csv, nrows=15)
+            _html = _df_preview.to_html(index=False, border=0, escape=False)
+            lines += [
+                "",
+                "<details>",
+                "<summary><b>Preview summary table</b> (top 15 rows) — click to expand</summary>",
+                "",
+                _html,
+                "",
+                "</details>",
+                ""
+            ]
+        except Exception as _e:
+            lines.append(f"_Summary preview unavailable: {type(_e).__name__}: {str(_e)}_")
+
+    # === Return ===
     res = {
         "data_file": str(fp),
-        "summary_csv": str(summary_csv),           
+        "summary_csv": str(summary_csv),
         "plots": [str(p) for p in pngs],
         "report_md": "\n".join(lines),
     }
