@@ -252,7 +252,6 @@ def main():
     for f in OUT_DIR.iterdir():
         print(" -", f)
 
-
 # --- helpers (top-level, no indent!) ---
 def _qd_anchor_from_heading(text: str) -> str:
     import re
@@ -268,6 +267,7 @@ def build_dashboard(outputs: list) -> str:
             data_name = Path(item["data_file"]).name
             anchor = _qd_anchor_from_heading(data_name)  
             link = f"[Open full report →](reports/report.html#{anchor})"
+
             thumb = next(
                 (Path(p).name for p in item.get("plots", []) if str(p).lower().endswith(".png")),
                 ""
@@ -285,21 +285,19 @@ def build_dashboard(outputs: list) -> str:
 
         except Exception as e:
             cards.append(f"- _Dashboard item failed for **{item.get('data_file','?')}** — {type(e).__name__}: {e}_")
-            continue
 
-    return dedent(f"""\
-.docname {{Noema-Bot Dashboard}}
-.doctype {{plain}}
-.theme {{darko}}
+    joined_cards = "\n".join(cards) if cards else "_No datasets found._"
 
-    # 🧭 Report Index
+    return dedent(
+        """
+.docname {Noema-Bot Dashboard}
+.doctype {plain}
+.theme {darko}
 
-    This dashboard lists all analyzed datasets. Click *Open full report* to jump into the full analysis.
+# 🧭 Report Index
 
-    {'\n'.join(cards) if cards else "_No datasets found._"}
-    """)
-        return dashboard_qd
+This dashboard lists all analyzed datasets. Click *Open full report* to jump into the full analysis.
 
-
-if __name__ == "__main__":
-    main()
+"""
+        + joined_cards
+    )
