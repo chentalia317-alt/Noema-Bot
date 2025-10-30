@@ -137,25 +137,26 @@ def analyze_one(fp: Path, n_limit: int | None = None) -> dict:
             lines.append(f"- {p}")
     # === Report (add numeric columns + anchor for cross-link) ===
     summary_csv_name = Path(summary_csv).name
-    png_names = [Path(p).name for p in pngs]
+    png_names = [Path(p).name for p in pngs]  # 只取文件名
 
     lines = [
         f"### {fp.name}",
         f"- rows: **{df.shape[0]}**, cols: **{df.shape[1]}**",
         f"- numeric columns: `{', '.join(cols)}`",
-        f"- summary: reports/{summary_csv_name}",
+        f"- summary: reports/{summary_csv_name}",     
         "",
         "#### Distributions",
     ]
     for name in png_names:
-        lines.append(f"![](./reports/{name})")
+    lines.append(f"![](./reports/{name})")        
 
-    return {
-            "data_file": str(fp),
-            "summary_csv": str(summary_csv),
-            "plots": pngs,
-            "report_md": "\n".join(lines),
+    res = {
+    "data_file": str(fp),
+    "summary_csv": str(summary_csv),           
+    "plots": [str(p) for p in pngs],
+    "report_md": "\n".join(lines),
     }
+    return res
 
 def main():
     # Supports optional single-file analysis, can be passed through the environment variable FILE=xxx.csv
@@ -246,30 +247,28 @@ def _qd_anchor_from_heading(text: str) -> str:
     import re
     return re.sub(r'[^a-z0-9]+', '', text.lower())
 
+
 def build_dashboard(outputs: list) -> str:
     from textwrap import dedent
     cards = []
     for item in outputs:
         try:
             data_name = Path(item["data_file"]).name
-            anchor = _slugify_anchor(Path(item["data_file"]).stem)  
+            anchor = _qd_anchor_from_heading(data_name)
+            link = f"[Open full report →](report.html#{anchor})"
 
-            thumb = ""
-            for p in item.get("plots", []):
-                if str(p).lower().endswith(".png"):
-                    thumb = Path(p).name 
-                    break
-
-            md_lines = [
+            thumb = next((Path(p).name for p in item.get("plots", []) if str(p).lower().endswith(".png")), "")
+            md = [
                 f"### {data_name}",
-                f"Summary: `{Path(item.get('summary_csv', '')).name}`" if item.get("summary_csv") else "_No summary table._",
-                f"[Open full report →](index.html#{anchor})",
+                f"Summary: {Path(item.get('summary_csv','')).name}" if item.get("summary_csv") else "_No summary table._",
+                link,
             ]
             if thumb:
-                md_lines.append(f"![](./{thumb})")
-            cards.append("\n\n".join(md_lines))
-        except Exception as _:
+                md.append(f"![](./reports/{thumb})")
+            cards.append("\n\n".join(md))
+        except Exception:
             continue
+            
     return dedent(f"""\
 .docname {{Noema-Bot Dashboard}}
 .doctype {{plain}}
