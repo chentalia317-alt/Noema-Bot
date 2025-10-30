@@ -140,21 +140,21 @@ def analyze_one(fp: Path, n_limit: int | None = None) -> dict:
     png_names = [Path(p).name for p in pngs]
 
     lines = [
-    f"### {fp.name}",
-    f"- rows: **{df.shape[0]}**, cols: **{df.shape[1]}**",
-    f"- numeric columns: `{', '.join(cols)}`",
-    f"- summary: reports/{summary_csv_name}",
-    "",
-    "#### Distributions",
+        f"### {fp.name}",
+        f"- rows: **{df.shape[0]}**, cols: **{df.shape[1]}**",
+        f"- numeric columns: `{', '.join(cols)}`",
+        f"- summary: reports/{summary_csv_name}",
+        "",
+        "#### Distributions",
     ]
     for name in png_names:
-    lines.append(f"![](./reports/{name})")
+        lines.append(f"![](./reports/{name})")
 
     return {
-        "data_file": str(fp),
-        "summary_csv": str(summary_csv),
-        "plots": pngs,
-        "report_md": "\n".join(lines),
+            "data_file": str(fp),
+            "summary_csv": str(summary_csv),
+            "plots": pngs,
+            "report_md": "\n".join(lines),
     }
 
 def main():
