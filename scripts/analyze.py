@@ -117,7 +117,7 @@ def analyze_one(fp: Path, n_limit: int | None = None) -> dict:
         out_png = OUT_DIR / f"{name}_{col}_hist.png"
         try:
             plot_hist(df, col, out_png)
-            pngs.append(out_png.name)   # 只保存文件名（因为 report.html 与 png 在同一目录）
+            pngs.append(Path(out_png).name)   # 只保存文件名
         except Exception as e:
             pngs.append(f"(failed: {col} -> {e})")
 
@@ -128,25 +128,24 @@ def analyze_one(fp: Path, n_limit: int | None = None) -> dict:
 
     SHOW_SUMMARY_PREVIEW = os.getenv("SHOW_SUMMARY", "0") == "1"
     summary_csv_name = Path(summary_csv).name
-    png_names = [Path(p).name for p in pngs]
 
     lines = [
         f"### {fp.name}",
         f"- rows: **{df.shape[0]}**, cols: **{df.shape[1]}**",
         f"- numeric columns: `{', '.join(cols) if cols else '—'}`",
+        # 注意：report.html 与 CSV/PNG 在同一目录（reports/）→ 不要加前缀
         f"- summary: [{summary_csv_name}](./{summary_csv_name})",
         "",
         "#### Distributions",
     ]
 
-    # add histogram
-    for name in png_names:
-        if name.endswith(".png"):
+    for name in pngs:
+        if str(name).endswith(".png"):
             lines.append(f"![](./{name})")
         else:
             lines.append(f"- {name}")
 
-    # ===optional:adding summary ===
+    # Optional: Folded summary preview
     if SHOW_SUMMARY_PREVIEW:
         try:
             _df_preview = pd.read_csv(summary_csv, nrows=15)
@@ -164,7 +163,6 @@ def analyze_one(fp: Path, n_limit: int | None = None) -> dict:
         except Exception as _e:
             lines.append(f"_Summary preview unavailable: {type(_e).__name__}: {str(_e)}_")
 
-    # === Return ===
     res = {
         "data_file": str(fp),
         "summary_csv": str(summary_csv),
