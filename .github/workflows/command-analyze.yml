@@ -120,46 +120,56 @@ jobs:
           echo "== Checking reports dir ==" && ls -la reports || true
           echo "== Checking QD files ==" && find reports -type f -name "*.qd" || true
 
+          # If noema-report.qd is missing, auto-generate a minimal one from REPORT.md
+          if [ ! -f ./reports/noema-report.qd ]; then
+            echo "::warning::./reports/noema-report.qd not found; generating a minimal one"
+            cat > ./reports/noema-report.qd <<'QEND'
+
+          > Auto-generated fallback. Replace this file with your own `.qd` template when ready.
+
+          ## Summary
+          {{ include "./REPORT.md" }}
+
+          ## Plots
+          {{ glob "./plots/*.png" | gallery }}
+
+          QEND
+            fi
+
           # 1) Full report -> reports/report.html (+ assets)
-          if [ -f ./reports/noema-report.qd ]; then
-            quarkdown c ./reports/noema-report.qd -o ./reports
-            if [ -f ./reports/index.html ]; then
-              mv ./reports/index.html ./reports/report.html
-            else
-              FULL_DIR=$(find ./reports -maxdepth 2 -type f -name index.html -printf '%h\n' | head -n1)
-              if [ -n "$FULL_DIR" ] && [ "$FULL_DIR" != "./reports" ]; then
-                mv "$FULL_DIR/index.html" ./reports/report.html
-                [ -d "$FULL_DIR/script" ] && cp -r "$FULL_DIR/script" ./reports/
-                [ -d "$FULL_DIR/theme" ] && cp -r "$FULL_DIR/theme" ./reports/
-                rm -rf "$FULL_DIR"
-              fi
-            fi
+          quarkdown c ./reports/noema-report.qd -o ./reports
+          if [ -f ./reports/index.html ]; then
+            mv ./reports/index.html ./reports/report.html
           else
-            echo "::error::reports/noema-report.qd not found"
-            ls -Rla
-            exit 1
-          fi
-
-          # 2) Dashboard -> reports/index.html (+ assets)
-          if [ -f ./reports/dashboard.qd ]; then
-            quarkdown c ./reports/dashboard.qd -o ./reports
-            if [ ! -f ./reports/index.html ]; then
-              DASH_DIR=$(find ./reports -maxdepth 2 -type f -name index.html -printf '%h\n' | head -n1)
-              if [ -n "$DASH_DIR" ] && [ "$DASH_DIR" != "./reports" ]; then
-                mv "$DASH_DIR/index.html" ./reports/index.html
-                [ -d "$DASH_DIR/script" ] && cp -r "$DASH_DIR/script" ./reports/
-                [ -d "$DASH_DIR/theme" ] && cp -r "$DASH_DIR/theme" ./reports/
-                rm -rf "$DASH_DIR"
+            FULL_DIR=$(find ./reports -maxdepth 2 -type f -name index.html -printf '%h\n' | head -n1)
+            if [ -n "$FULL_DIR" ] && [ "$FULL_DIR" != "./reports" ]; then
+              mv "$FULL_DIR/index.html" ./reports/report.html
+              [ -d "$FULL_DIR/script" ] && cp -r "$FULL_DIR/script" ./reports/
+              [ -d "$FULL_DIR/theme" ] && cp -r "$FULL_DIR/theme" ./reports/
+              rm -rf "$FULL_DIR"
+                fi
               fi
-            fi
-          else
-            echo "dashboard.qd not found, fallback to report.html as index"
-            cp -f ./reports/report.html ./reports/index.html
-          fi
 
-          touch ./reports/.nojekyll
-          echo "== final reports tree =="
-          ls -Rla ./reports
+              # 2) Dashboard -> reports/index.html (+ assets)
+              if [ ! -f ./reports/dashboard.qd ]; then
+                echo "::notice::dashboard.qd not found; using report.html as index"
+                cp -f ./reports/report.html ./reports/index.html
+              else
+                quarkdown c ./reports/dashboard.qd -o ./reports
+                if [ ! -f ./reports/index.html ]; then
+                  DASH_DIR=$(find ./reports -maxdepth 2 -type f -name index.html -printf '%h\n' | head -n1)
+                  if [ -n "$DASH_DIR" ] && [ "$DASH_DIR" != "./reports" ]; then
+                    mv "$DASH_DIR/index.html" ./reports/index.html
+                    [ -d "$DASH_DIR/script" ] && cp -r "$DASH_DIR/script" ./reports/
+                    [ -d "$DASH_DIR/theme" ] && cp -r "$DASH_DIR/theme" ./reports/
+                    rm -rf "$DASH_DIR"
+                  fi
+                fi
+              fi
+
+              touch ./reports/.nojekyll
+              echo "== final reports tree =="
+              ls -Rla ./reports
 
       - name: Commit reports back
         run: |
