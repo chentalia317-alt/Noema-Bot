@@ -1,0 +1,9 @@
+
+> Auto-generated fallback. Replace this file with your own `.qd` template when ready.
+
+## Summary
+{{ include "./REPORT.md" }}
+
+## Plots
+{{ glob "./plots/*.png" | gallery }}
+
