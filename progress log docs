@@ -29,3 +29,7 @@ fix the distribution without graph(csv.), I don't know whyyyyyyyyyyy!!!!!!!!!!!!
 Embed a collapsible table preview within HTML.
 I need to take a rest, I've been debugging and refining for hours nonstop💤
 
+2025-11-3 Progress Log
+Today:
+fix complie html.qd, and it generates a wrong page.(including report and distribution...)
+The graphs can not show in the reports.(maybe the html genering/complie/path/)
