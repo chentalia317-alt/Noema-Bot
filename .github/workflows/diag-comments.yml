@@ -1,0 +1,25 @@
+name: "DIAG: comments"
+
+on:
+  issue_comment:
+    types: [created]
+  issues:
+    types: [opened, edited]
+  pull_request:
+    types: [opened, edited]
+
+permissions:
+  contents: read
+
+jobs:
+  echo:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print event brief
+        run: |
+          echo "Event: ${{ github.event_name }}"
+          echo "Actor: ${{ github.actor }}"
+          echo "Issue#: ${{ github.event.issue.number || github.event.pull_request.number }}"
+          echo "Body: <<"
+          echo "${{ github.event.comment.body || github.event.issue.body || github.event.pull_request.body }}"
+          echo ">>"
