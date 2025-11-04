@@ -29,11 +29,11 @@ jobs:
   run:
     if: >-
       ${{
-        github.event_name == 'workflow_dispatch' ||
-        (github.event_name == 'issue_comment' &&
-         github.event.issue.pull_request == null &&
-         startsWith(github.event.comment.body, '/analyze'))
+       github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'issue_comment' &&
+        startsWith(github.event.comment.body, '/analyze'))
       }}
+
     runs-on: ubuntu-latest
     environment: github-pages
 
