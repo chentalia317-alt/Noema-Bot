@@ -31,7 +31,7 @@ concurrency:
 
 jobs:
   run:
-    # 允许三种触发来源；评论或正文里“包含”/analyze 即可
+    # 允许三种来源；正文/评论里“包含” /analyze 即可
     if: >-
       ${{
         github.event_name == 'workflow_dispatch' ||
@@ -63,12 +63,12 @@ jobs:
           set -euo pipefail
           FILE_INPUT=""
           N_INPUT="0"
+          RAW=""
 
           case "${{ github.event_name }}" in
             workflow_dispatch)
               FILE_INPUT="${{ inputs.file }}"
               N_INPUT="${{ inputs.n }}"
-              RAW=""
               ;;
             issue_comment)
               RAW="${{ github.event.comment.body }}"
@@ -81,10 +81,9 @@ jobs:
               ;;
           esac
 
-          # 仅当存在 /analyze 时才解析 file= 与 n=
-          if printf '%s' "${RAW:-/analyze}" | grep -q '/analyze'; then
-            FILE_INPUT="${FILE_INPUT:-$(printf '%s' "${RAW:-}" | sed -n 's/.*file=\([A-Za-z0-9._\/-]\+\).*/\1/p' || true)}"
-            N_INPUT="${N_INPUT:-$(printf '%s' "${RAW:-}"  | sed -n 's/.*[[:<:]]n=\([0-9]\+\).*/\1/p' || echo 0)}"
+          if [ -n "${RAW:-}" ]; then
+            FILE_INPUT="${FILE_INPUT:-$(printf '%s' "$RAW" | sed -n 's/.*file=\([A-Za-z0-9._\/-]\+\).*/\1/p' || true)}"
+            N_INPUT="${N_INPUT:-$(printf '%s' "$RAW"  | sed -n 's/.*[[:<:]]n=\([0-9]\+\).*/\1/p' || echo 0)}"
           fi
 
           echo "file=${FILE_INPUT}" >> "$GITHUB_OUTPUT"
@@ -118,7 +117,7 @@ jobs:
           set -euo pipefail
           mkdir -p reports
 
-          # 如果缺少 .qd，用安全模板兜底（ASCII 引号 + 合理路径）
+          # 缺 .qd 时用兜底模板（ASCII 引号 + ./*.png 路径）
           if [ ! -f ./reports/noema-report.qd ]; then
             cat > ./reports/noema-report.qd <<'QEND'
 .docname {Noema Report}
@@ -147,7 +146,7 @@ QEND
             fi
           fi
 
-          # 2) Dashboard → reports/index.html（若没有 dashboard.qd，就用全文当首页）
+          # 2) Dashboard → reports/index.html（若无 dashboard.qd 就用全文当首页）
           if [ -f ./reports/dashboard.qd ]; then
             quarkdown c ./reports/dashboard.qd -o ./reports
             if [ ! -f ./reports/index.html ]; then
