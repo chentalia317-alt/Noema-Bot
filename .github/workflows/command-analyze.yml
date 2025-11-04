@@ -115,7 +115,7 @@ jobs:
 
       - name: Compile .qd to HTML (dashboard & full report)
         run: |
-          set -e
+          set -euo pipefail
           mkdir -p reports
           echo "== Checking reports dir ==" && ls -la reports || true
           echo "== Checking QD files ==" && find reports -type f -name "*.qd" || true
@@ -124,17 +124,17 @@ jobs:
           if [ ! -f ./reports/noema-report.qd ]; then
             echo "::warning::./reports/noema-report.qd not found; generating a minimal one"
             cat > ./reports/noema-report.qd <<'QEND'
+.docname {Noema Report}
+.doctype {plain}
+.theme {darko}
 
-          > Auto-generated fallback. Replace this file with your own `.qd` template when ready.
+# Summary
+{{ include "./REPORT.md" }}
 
-          ## Summary
-          {{ include "./REPORT.md" }}
-
-          ## Plots
-          {{ glob "./plots/*.png" | gallery }}
-
-          QEND
-            fi
+# Plots
+{{ glob "./*.png" | gallery }}
+QEND
+          fi
 
           # 1) Full report -> reports/report.html (+ assets)
           quarkdown c ./reports/noema-report.qd -o ./reports
@@ -147,29 +147,28 @@ jobs:
               [ -d "$FULL_DIR/script" ] && cp -r "$FULL_DIR/script" ./reports/
               [ -d "$FULL_DIR/theme" ] && cp -r "$FULL_DIR/theme" ./reports/
               rm -rf "$FULL_DIR"
-                fi
-              fi
+            fi
+          fi
 
-              # 2) Dashboard -> reports/index.html (+ assets)
-              if [ ! -f ./reports/dashboard.qd ]; then
-                echo "::notice::dashboard.qd not found; using report.html as index"
-                cp -f ./reports/report.html ./reports/index.html
-              else
-                quarkdown c ./reports/dashboard.qd -o ./reports
-                if [ ! -f ./reports/index.html ]; then
-                  DASH_DIR=$(find ./reports -maxdepth 2 -type f -name index.html -printf '%h\n' | head -n1)
-                  if [ -n "$DASH_DIR" ] && [ "$DASH_DIR" != "./reports" ]; then
-                    mv "$DASH_DIR/index.html" ./reports/index.html
-                    [ -d "$DASH_DIR/script" ] && cp -r "$DASH_DIR/script" ./reports/
-                    [ -d "$DASH_DIR/theme" ] && cp -r "$DASH_DIR/theme" ./reports/
-                    rm -rf "$DASH_DIR"
-                  fi
-                fi
+          # 2) Dashboard -> reports/index.html (+ assets)
+          if [ ! -f ./reports/dashboard.qd ]; then
+            echo "::notice::dashboard.qd not found; using report.html as index"
+            cp -f ./reports/report.html ./reports/index.html
+          else
+            quarkdown c ./reports/dashboard.qd -o ./reports
+            if [ ! -f ./reports/index.html ]; then
+              DASH_DIR=$(find ./reports -maxdepth 2 -type f -name index.html -printf '%h\n' | head -n1)
+              if [ -n "$DASH_DIR" ] && [ "$DASH_DIR" != "./reports" ]; then
+                mv "$DASH_DIR/index.html" ./reports/index.html
+                [ -d "$DASH_DIR/script" ] && cp -r "$DASH_DIR/script" ./reports/
+                [ -d "$DASH_DIR/theme" ] && cp -r "$DASH_DIR/theme" ./reports/
+                rm -rf "$DASH_DIR"
               fi
+            fi
+          fi
 
-              touch ./reports/.nojekyll
-              echo "== final reports tree =="
-              ls -Rla ./reports
+          touch ./reports/.nojekyll
+          echo "== final reports tree ==" && ls -Rla ./reports
 
       - name: Commit reports back
         run: |
