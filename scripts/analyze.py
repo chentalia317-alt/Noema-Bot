@@ -19,8 +19,7 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 CLEAN = os.getenv("CLEAN", "1") == "1"   # CLEAN=0 to keep old files
 if CLEAN and OUT_DIR.exists():
     for p in OUT_DIR.iterdir():
-        # Keep REPORT.md (skip deleting)
-        if p.is_file() and p.name == "REPORT.md":
+        if p.name in {"REPORT.md", "noema-report.qd", "dashboard.qd", ".nojekyll"}:
             continue
         if p.is_dir():
             shutil.rmtree(p)
@@ -191,10 +190,24 @@ def main():
         targets = [p for p in DATA_DIR.glob("**/*") if p.suffix.lower() in (".csv", ".xls", ".xlsx", ".json")]
 
     if not targets:
-        note = "No data files in data/. Nothing to analyze."
-        print(note)
-        Path("report_summary.json").write_text(json.dumps({"markdown": note}, ensure_ascii=False), encoding="utf-8")
-        return
+    note = "No data files in data/. Nothing to analyze."
+    print(note)
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    (OUT_DIR / "REPORT.md").write_text(note, encoding="utf-8")
+
+    qd_min = """\
+.docname {Noema Report}
+.doctype {plain}
+.theme {darko}
+
+# No Data Found
+_No data files in data/. Nothing to analyze._
+"""
+    (OUT_DIR / "noema-report.qd").write_text(qd_min, encoding="utf-8")
+    (OUT_DIR / "dashboard.qd").write_text(qd_min, encoding="utf-8")
+
+    Path("report_summary.json").write_text(json.dumps({"markdown": note}, ensure_ascii=False), encoding="utf-8")
+    return
 
     targets = sorted(targets, key=lambda x: str(x))
     print("Targets:", [str(p) for p in targets])
