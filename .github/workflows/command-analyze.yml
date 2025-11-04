@@ -1,18 +1,22 @@
 name: "Command: /analyze"
 
 on:
-  issue_comment:
-    types: [created]
   workflow_dispatch:
     inputs:
       file:
-        description: "Optional data file under data/ (e.g., baseline_cleaned_v7.csv)"
+        description: "Optional data file under data/ (e.g., baseline.csv)"
         required: false
         default: ""
       n:
         description: "Max numeric columns to plot (0 = all)"
         required: false
         default: "0"
+  issue_comment:
+    types: [created]
+  issues:
+    types: [opened, edited]
+  pull_request:
+    types: [opened, edited]
 
 permissions:
   contents: write
@@ -27,26 +31,25 @@ concurrency:
 
 jobs:
   run:
+    # 允许三种触发来源；评论或正文里“包含”/analyze 即可
     if: >-
       ${{
-       github.event_name == 'workflow_dispatch' ||
-       (github.event_name == 'issue_comment' &&
-        startsWith(github.event.comment.body, '/analyze'))
+        github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'issue_comment' && contains(github.event.comment.body, '/analyze')) ||
+        (github.event_name == 'issues'        && contains(github.event.issue.body,   '/analyze')) ||
+        (github.event_name == 'pull_request'  && contains(github.event.pull_request.body, '/analyze'))
       }}
-
     runs-on: ubuntu-latest
     environment: github-pages
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+        with: { fetch-depth: 0 }
 
       - name: Set up Python
         uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+        with: { python-version: "3.11" }
 
       - name: Install Python deps
         run: |
@@ -61,46 +64,47 @@ jobs:
           FILE_INPUT=""
           N_INPUT="0"
 
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            FILE_INPUT="${{ inputs.file }}"
-            N_INPUT="${{ inputs.n }}"
-          else
-            RAW="${{ github.event.comment.body }}"
-            # extract file=xxx (alnum, dot, slash, dash, underscore)
-            FILE_INPUT="$(printf '%s' "$RAW" | sed -n 's/.*file=\([A-Za-z0-9._\/-]\+\).*/\1/p' || true)"
-            # extract n=NN
-            N_INPUT="$(printf '%s' "$RAW" | sed -n 's/.*[[:<:]]n=\([0-9]\+\).*/\1/p' || echo 0)"
+          case "${{ github.event_name }}" in
+            workflow_dispatch)
+              FILE_INPUT="${{ inputs.file }}"
+              N_INPUT="${{ inputs.n }}"
+              RAW=""
+              ;;
+            issue_comment)
+              RAW="${{ github.event.comment.body }}"
+              ;;
+            issues)
+              RAW="${{ github.event.issue.body }}"
+              ;;
+            pull_request)
+              RAW="${{ github.event.pull_request.body }}"
+              ;;
+          esac
+
+          # 仅当存在 /analyze 时才解析 file= 与 n=
+          if printf '%s' "${RAW:-/analyze}" | grep -q '/analyze'; then
+            FILE_INPUT="${FILE_INPUT:-$(printf '%s' "${RAW:-}" | sed -n 's/.*file=\([A-Za-z0-9._\/-]\+\).*/\1/p' || true)}"
+            N_INPUT="${N_INPUT:-$(printf '%s' "${RAW:-}"  | sed -n 's/.*[[:<:]]n=\([0-9]\+\).*/\1/p' || echo 0)}"
           fi
 
-          echo "file=$FILE_INPUT"     >> "$GITHUB_OUTPUT"
-          echo "n=$N_INPUT"           >> "$GITHUB_OUTPUT"
+          echo "file=${FILE_INPUT}" >> "$GITHUB_OUTPUT"
+          echo "n=${N_INPUT}"       >> "$GITHUB_OUTPUT"
           echo "Resolved: FILE='${FILE_INPUT:-<ALL>}'  N='${N_INPUT}'"
 
-      - name: Run analysis
+      - name: Run analysis (generate reports/*.png, REPORT.md, *.qd)
         env:
           FILE: ${{ steps.args.outputs.file }}
+          CLEAN: "1"
+          SHOW_SUMMARY: "0"
         run: |
           python scripts/analyze.py --n "${{ steps.args.outputs.n }}"
-
-      - name: Read summary (install jq)
-        id: summary
-        shell: bash
-        run: |
-          set -euo pipefail
-          sudo apt-get update -y
-          sudo apt-get install -y jq
-          MD="$(jq -r '.markdown' report_summary.json)"
-          {
-            echo 'md<<__MD__'
-            printf '%s\n' "$MD"
-            echo '__MD__'
-          } >> "$GITHUB_OUTPUT"
+          echo "== reports ==" && ls -la reports || true
 
       # ---- Quarkdown rendering (needs Java 17+) ----
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '17'
 
       - name: Install Quarkdown CLI
@@ -108,21 +112,14 @@ jobs:
           curl -fsSL https://raw.githubusercontent.com/quarkdown-labs/get-quarkdown/refs/heads/main/install.sh | sudo env "PATH=$PATH" bash
           quarkdown --version || true
 
-      - name: Verify outputs exist
-        run: |
-          echo "== repo root ==" && ls -la
-          echo "== reports dir ==" && ls -la reports || true
-
       - name: Compile .qd to HTML (dashboard & full report)
+        shell: bash
         run: |
           set -euo pipefail
           mkdir -p reports
-          echo "== Checking reports dir ==" && ls -la reports || true
-          echo "== Checking QD files ==" && find reports -type f -name "*.qd" || true
 
-          # If noema-report.qd is missing, auto-generate a minimal one from REPORT.md
+          # 如果缺少 .qd，用安全模板兜底（ASCII 引号 + 合理路径）
           if [ ! -f ./reports/noema-report.qd ]; then
-            echo "::warning::./reports/noema-report.qd not found; generating a minimal one"
             cat > ./reports/noema-report.qd <<'QEND'
 .docname {Noema Report}
 .doctype {plain}
@@ -136,7 +133,7 @@ jobs:
 QEND
           fi
 
-          # 1) Full report -> reports/report.html (+ assets)
+          # 1) Full report → reports/report.html
           quarkdown c ./reports/noema-report.qd -o ./reports
           if [ -f ./reports/index.html ]; then
             mv ./reports/index.html ./reports/report.html
@@ -150,11 +147,8 @@ QEND
             fi
           fi
 
-          # 2) Dashboard -> reports/index.html (+ assets)
-          if [ ! -f ./reports/dashboard.qd ]; then
-            echo "::notice::dashboard.qd not found; using report.html as index"
-            cp -f ./reports/report.html ./reports/index.html
-          else
+          # 2) Dashboard → reports/index.html（若没有 dashboard.qd，就用全文当首页）
+          if [ -f ./reports/dashboard.qd ]; then
             quarkdown c ./reports/dashboard.qd -o ./reports
             if [ ! -f ./reports/index.html ]; then
               DASH_DIR=$(find ./reports -maxdepth 2 -type f -name index.html -printf '%h\n' | head -n1)
@@ -165,18 +159,12 @@ QEND
                 rm -rf "$DASH_DIR"
               fi
             fi
+          else
+            cp -f ./reports/report.html ./reports/index.html
           fi
 
           touch ./reports/.nojekyll
           echo "== final reports tree ==" && ls -Rla ./reports
-
-      - name: Commit reports back
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add reports/ report_summary.json
-          git commit -m "chore: update analysis artifacts [skip ci]" || echo "no changes"
-          git push
 
       - name: Upload artifact (reports/)
         uses: actions/upload-pages-artifact@v3
@@ -188,11 +176,11 @@ QEND
         uses: actions/deploy-pages@v4
 
       - name: Comment back as Noema-Bot
-        if: ${{ github.event_name == 'issue_comment' }}
+        if: ${{ github.event_name == 'issue_comment' || github.event_name == 'issues' || github.event_name == 'pull_request' }}
         uses: peter-evans/create-or-update-comment@v4
         with:
           token: ${{ secrets.BOT_TOKEN || secrets.GITHUB_TOKEN }}
-          issue-number: ${{ github.event.issue.number }}
+          issue-number: ${{ github.event.issue.number || github.event.pull_request.number }}
           body: |
             🤖 **Noema-Bot** finished the analysis.
 
@@ -204,6 +192,3 @@ QEND
 
             **Raw markdown summary (repo):**
             https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/reports/REPORT.md
-
-            ---
-            ${{ steps.summary.outputs.md }}
