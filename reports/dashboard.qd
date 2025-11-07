@@ -1,23 +1,25 @@
+---
+title: Noema Dashboard
+author: Noema-Bot
+---
 
-.docname {Noema-Bot Dashboard}
-.doctype {plain}
-.theme {darko}
+# Dashboard
 
-# 🧭 Report Index
+- [Full report](./report.html)
+- Raw summary is embedded below.
 
-This dashboard lists all analyzed datasets. Click *Open full report* to jump into the full analysis.
+## Quick Summary
 
-### baseline_cleaned_v7.csv
+**Targets:** [`baseline_cleaned_v7.csv`, `intervention_B_cleaned.csv`]
+**Rows:** **231**, **Cols:** **13**  
+**Numeric columns found:** 7
 
-Summary: baseline_cleaned_v7_summary.csv
+**Figures:**
+![](./img/hist_kss_morning.png)
+![](./img/hist_kss_afternoon.png)
+![](./img/hist_kss_evening.png)
+![](./img/hist_outdoor_light.png)
+![](./img/hist_reduce_light.png)
+![](./img/hist_no_device.png)
+![](./img/hist_compliance.png)
 
-[Open full report →](./report.html#baselinecleanedv7csv)
-
-![](./baseline_cleaned_v7_kss_morning_hist.png)
-### intervention_B_cleaned.csv
-
-Summary: intervention_B_cleaned_summary.csv
-
-[Open full report →](./report.html#interventionbcleanedcsv)
-
-![](./intervention_B_cleaned_kss_morning_hist.png)

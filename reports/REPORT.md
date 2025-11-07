@@ -1,25 +1,12 @@
-## 🧪 Auto Analysis Report
+**Targets:** [`baseline_cleaned_v7.csv`, `intervention_B_cleaned.csv`]
+**Rows:** **231**, **Cols:** **13**  
+**Numeric columns found:** 7
 
-### baseline_cleaned_v7.csv
-- rows: **140**, cols: **7**
-- numeric columns: `kss_morning, kss_afternoon, kss_evening`
-- summary: [baseline_cleaned_v7_summary.csv](./baseline_cleaned_v7_summary.csv)
-
-#### Distributions
-![](./baseline_cleaned_v7_kss_morning_hist.png)
-![](./baseline_cleaned_v7_kss_afternoon_hist.png)
-![](./baseline_cleaned_v7_kss_evening_hist.png)
-
-### intervention_B_cleaned.csv
-- rows: **91**, cols: **12**
-- numeric columns: `kss_morning, kss_afternoon, outdoor_light, reduce_light, no_device, compliance, kss_evening`
-- summary: [intervention_B_cleaned_summary.csv](./intervention_B_cleaned_summary.csv)
-
-#### Distributions
-![](./intervention_B_cleaned_kss_morning_hist.png)
-![](./intervention_B_cleaned_kss_afternoon_hist.png)
-![](./intervention_B_cleaned_outdoor_light_hist.png)
-![](./intervention_B_cleaned_reduce_light_hist.png)
-![](./intervention_B_cleaned_no_device_hist.png)
-![](./intervention_B_cleaned_compliance_hist.png)
-![](./intervention_B_cleaned_kss_evening_hist.png)
+**Figures:**
+![](./img/hist_kss_morning.png)
+![](./img/hist_kss_afternoon.png)
+![](./img/hist_kss_evening.png)
+![](./img/hist_outdoor_light.png)
+![](./img/hist_reduce_light.png)
+![](./img/hist_no_device.png)
+![](./img/hist_compliance.png)
