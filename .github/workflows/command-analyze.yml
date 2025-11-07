@@ -1,209 +1,37 @@
-name: "Command: /analyze"
+name: "Command: /analyze (minimal)"
 
 on:
   workflow_dispatch:
-    inputs:
-      file:
-        description: "Optional data file under data/ (e.g., baseline.csv)"
-        required: false
-        default: ""
-      n:
-        description: "Max numeric columns to plot (0 = all)"
-        required: false
-        default: "0"
   issue_comment:
     types: [created]
-  issues:
-    types: [opened, edited]
-  pull_request:
-    types: [opened, edited]
 
 permissions:
-  contents: write
-  issues: write
-  pull-requests: write
-  pages: write
-  id-token: write
-
-concurrency:
-  group: "pages"
-  cancel-in-progress: true
+  contents: read
 
 jobs:
   run:
     runs-on: ubuntu-latest
-    environment: github-pages
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
+      - name: Show event
+        run: |
+          echo "event=${{ github.event_name }}"
+          echo "body=<<${{ github.event.comment.body }}>>"
 
-      # --- Gate: only can be triggered manually or comment：/analyze ---
-      - name: Gate check
+      # 只有包含 /analyze 才继续；否则用 78 中性退出（不会报红）
+      - name: Gate
         id: gate
         shell: bash
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "run=1" >> "$GITHUB_OUTPUT"
-            echo "Gate: workflow_dispatch -> proceed"
-            exit 0
-          fi
-
-          RAW="${{ github.event.comment.body || github.event.issue.body || github.event.pull_request.body }}"
-          echo "Gate RAW: <<$RAW>>"
+          RAW="${{ github.event.comment.body }}"
           if printf '%s' "$RAW" | grep -q '/analyze'; then
-            echo "run=1" >> "$GITHUB_OUTPUT"
+            echo "ok=1" >> "$GITHUB_OUTPUT"
             echo "Gate: /analyze found -> proceed"
           else
-            echo "Gate: no /analyze -> neutral skip"
-            # 78 = neutral
+            echo "Gate: /analyze NOT found -> neutral exit"
             exit 78
           fi
 
-      - name: Set up Python
-        if: ${{ steps.gate.outputs.run == '1' }}
-        uses: actions/setup-python@v5
-        with: { python-version: "3.11" }
-
-      - name: Install Python deps
-        if: ${{ steps.gate.outputs.run == '1' }}
-        run: |
-          python -m pip install -U pip
-          pip install -r requirements.txt
-
-      - name: Resolve args (FILE & N)
-        if: ${{ steps.gate.outputs.run == '1' }}
-        id: args
-        shell: bash
-        run: |
-          set -euo pipefail
-          FILE_INPUT=""
-          N_INPUT="0"
-          case "${{ github.event_name }}" in
-            workflow_dispatch)
-              FILE_INPUT="${{ inputs.file }}"
-              N_INPUT="${{ inputs.n }}"
-              ;;
-            issue_comment)
-              RAW="${{ github.event.comment.body }}"
-              ;;
-            issues)
-              RAW="${{ github.event.issue.body }}"
-              ;;
-            pull_request)
-              RAW="${{ github.event.pull_request.body }}"
-              ;;
-          esac
-          if [ -n "${RAW:-}" ]; then
-            FILE_INPUT="${FILE_INPUT:-$(printf '%s' "$RAW" | sed -n 's/.*file=\([A-Za-z0-9._\/-]\+\).*/\1/p' || true)}"
-            N_INPUT="${N_INPUT:-$(printf '%s' "$RAW"  | sed -n 's/.*[[:<:]]n=\([0-9]\+\).*/\1/p' || echo 0)}"
-          fi
-          echo "file=${FILE_INPUT}" >> "$GITHUB_OUTPUT"
-          echo "n=${N_INPUT}"       >> "$GITHUB_OUTPUT"
-          echo "Resolved: FILE='${FILE_INPUT:-<ALL>}'  N='${N_INPUT}'"
-
-      - name: Run analysis (generate reports/*.png, REPORT.md, *.qd)
-        if: ${{ steps.gate.outputs.run == '1' }}
-        env:
-          FILE: ${{ steps.args.outputs.file }}
-          CLEAN: "1"
-          SHOW_SUMMARY: "0"
-        run: |
-          python scripts/analyze.py --n "${{ steps.args.outputs.n }}"
-          echo "== reports ==" && ls -la reports || true
-
-      # ---- Quarkdown rendering (needs Java 17+) ----
-      - name: Set up Java 17
-        if: ${{ steps.gate.outputs.run == '1' }}
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: Install Quarkdown CLI
-        if: ${{ steps.gate.outputs.run == '1' }}
-        run: |
-          curl -fsSL https://raw.githubusercontent.com/quarkdown-labs/get-quarkdown/refs/heads/main/install.sh | sudo env "PATH=$PATH" bash
-          quarkdown --version || true
-
-      - name: Compile .qd to HTML (dashboard & full report)
-        if: ${{ steps.gate.outputs.run == '1' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p reports
-          if [ ! -f ./reports/noema-report.qd ]; then
-            cat > ./reports/noema-report.qd <<'QEND'
-.docname {Noema Report}
-.doctype {plain}
-.theme {darko}
-
-# Summary
-{{ include "./REPORT.md" }}
-
-# Plots
-{{ glob "./*.png" | gallery }}
-QEND
-          fi
-
-          quarkdown c ./reports/noema-report.qd -o ./reports
-          if [ -f ./reports/index.html ]; then
-            mv ./reports/index.html ./reports/report.html
-          else
-            FULL_DIR=$(find ./reports -maxdepth 2 -type f -name index.html -printf '%h\n' | head -n1)
-            if [ -n "$FULL_DIR" ] && [ "$FULL_DIR" != "./reports" ]; then
-              mv "$FULL_DIR/index.html" ./reports/report.html
-              [ -d "$FULL_DIR/script" ] && cp -r "$FULL_DIR/script" ./reports/
-              [ -d "$FULL_DIR/theme" ] && cp -r "$FULL_DIR/theme" ./reports/
-              rm -rf "$FULL_DIR"
-            fi
-          fi
-
-          if [ -f ./reports/dashboard.qd ]; then
-            quarkdown c ./reports/dashboard.qd -o ./reports
-            if [ ! -f ./reports/index.html ]; then
-              DASH_DIR=$(find ./reports -maxdepth 2 -type f -name index.html -printf '%h\n' | head -n1)
-              if [ -n "$DASH_DIR" ] && [ "$DASH_DIR" != "./reports" ]; then
-                mv "$DASH_DIR/index.html" ./reports/index.html
-                [ -d "$DASH_DIR/script" ] && cp -r "$DASH_DIR/script" ./reports/
-                [ -d "$DASH_DIR/theme" ] && cp -r "$DASH_DIR/theme" ./reports/
-                rm -rf "$DASH_DIR"
-              fi
-            fi
-          else
-            cp -f ./reports/report.html ./reports/index.html
-          fi
-
-          touch ./reports/.nojekyll
-          echo "== final reports tree ==" && ls -Rla ./reports
-
-      - name: Upload artifact (reports/)
-        if: ${{ steps.gate.outputs.run == '1' }}
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: reports
-
-      - name: Deploy to GitHub Pages
-        if: ${{ steps.gate.outputs.run == '1' }}
-        id: deploy
-        uses: actions/deploy-pages@v4
-
-      - name: Comment back as Noema-Bot
-        if: ${{ steps.gate.outputs.run == '1' && (github.event_name == 'issue_comment' || github.event_name == 'issues' || github.event_name == 'pull_request') }}
-        uses: peter-evans/create-or-update-comment@v4
-        with:
-          token: ${{ secrets.BOT_TOKEN || secrets.GITHUB_TOKEN }}
-          issue-number: ${{ github.event.issue.number || github.event.pull_request.number }}
-          body: |
-            🤖 **Noema-Bot** finished the analysis.
-
-            **Dashboard (GitHub Pages):**
-            ${{ steps.deploy.outputs.page_url }}reports/
-
-            **Full report (HTML):**
-            ${{ steps.deploy.outputs.page_url }}reports/report.html
-
-            **Raw markdown summary (repo):**
-            https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/reports/REPORT.md
+      - name: Hello (prove this workflow runs)
+        if: ${{ steps.gate.outputs.ok == '1' }}
+        run: echo "Hello from /analyze workflow ✅"
