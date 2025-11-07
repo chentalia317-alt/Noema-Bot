@@ -1,268 +1,213 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+from __future__ import annotations
+import argparse
+import os
 from pathlib import Path
-import os, json, sys, re, argparse
+from typing import List, Tuple, Optional, Dict, Any
+import json
+import re
+
 import pandas as pd
 import numpy as np
 
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import shutil
-
-# Define directories first
-ROOT_DIR = Path(__file__).resolve().parent.parent
-OUT_DIR = ROOT_DIR / "reports"
-DATA_DIR = ROOT_DIR / "data"
-OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
-# Optional cleaning step
-CLEAN = os.getenv("CLEAN", "1") == "1"   # CLEAN=0 to keep old files
-if CLEAN and OUT_DIR.exists():
-    for p in OUT_DIR.iterdir():
-        # Keep REPORT.md (skip deleting)
-        if p.is_file() and p.name == "REPORT.md":
-            continue
-        if p.is_dir():
-            shutil.rmtree(p)
+ROOT = Path(__file__).resolve().parents[1]
+DATA_DIR = ROOT / "data"
+REPORTS_DIR = ROOT / "reports"
+IMG_DIR = REPORTS_DIR / "img"
+REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+IMG_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def find_files(file_arg: str) -> List[Path]:
+    """Resolve files to analyze. If file_arg is empty -> all CSV under data/."""
+    files: List[Path] = []
+    if file_arg:
+        # allow raw name or path under data/
+        p = Path(file_arg)
+        if not p.is_absolute():
+            p = (DATA_DIR / file_arg).resolve()
+        if p.exists() and p.suffix.lower() == ".csv":
+            files = [p]
         else:
-            p.unlink()
-OUT_DIR.mkdir(parents=True, exist_ok=True)
+            print(f"[warn] file not found or not CSV: {p}")
+    else:
+        files = sorted(DATA_DIR.glob("*.csv"))
+    return files
 
-# Detect column names that look like identifiers rather than data fields
-ID_LIKE_PATTERN = re.compile(
-    r'(?:^|_)(id|uuid|index|sampleid|subjectid|recordid|caseid|patientid)(?:$|_)',
-    re.IGNORECASE)
 
-DATA_DIR = Path("data")
-OUT_DIR = Path("reports")
-OUT_DIR.mkdir(parents=True, exist_ok=True)
-
-def load_table(fp: Path) -> pd.DataFrame:
-    if fp.suffix.lower() == ".csv":
-        return pd.read_csv(fp)
-    if fp.suffix.lower() in (".xls", ".xlsx"):
-        return pd.read_excel(fp)
-    if fp.suffix.lower() == ".json":
-        return pd.read_json(fp)
-    raise ValueError(f"Unsupported file: {fp.name}")
-    
-# return (the list of retained columns, the dictionary of skipped reasons), and sort by missing rate (low-high);support the upper limit of limit
-def numeric_cols(df: pd.DataFrame, limit: int | None = None) -> tuple[list[str], dict[str, str]]:
-    skipped: dict[str, str] = {}
-    candidates: list[str]=[]
-    
-    #numeric columns
-    num_cols = df.select_dtypes(include="number").columns.tolist()
-    n_rows = len(df)
-
-    for col in num_cols:
-        s = pd.to_numeric(df[col], errors="coerce")
-        s_non = s.dropna()
-
-        if s_non.empty:
-            skipped[col] = "all-NaN"
-            continue
-        if s_non.nunique(dropna=True) <=1:
-            skipped[col] = "constant"
-            continue
-        looks_like_id = bool(ID_LIKE_PATTERN.search(col))
-        is_intish = (pd.api.types.is_integer_dtype(s_non) or np.all(np.floor(s_non) == s_non))
-        unique_ratio = s_non.nunique() / max(len(s_non), 1)
-        is_monotonic_index = is_intish and (s_non.is_monotonic_increasing or s_non.is_monotonic_decreasing)
-        
-        #Interger sequence and like numbering(high uniqueness/monotonicity)/column names resemble IDs
-        if (looks_like_id and (unique_ratio > 0.5 or is_intish)) or (is_intish and (unique_ratio > 0.8 or is_monotonic_index)):
-            skipped[col] = "likely-ID/index"
-            continue
-
-        candidates.append(col)
-
-    candidates.sort(key=lambda c:df[c].isna().mean())
-
-    if limit and limit > 0:
-        candidates = candidates[:limit]
-    return candidates, skipped
-
-def plot_hist(df: pd.DataFrame, col: str, out_png: Path):
-    plt.figure()
-    df[col].dropna().astype(float).plot(kind="hist", bins=30)
-    plt.title(f"{col} histogram")
-    plt.xlabel(col)
-    plt.ylabel("count")
-    plt.tight_layout()
-    plt.savefig(out_png, dpi=150)
-    plt.close()
-    
-def analyze_one(fp: Path, n_limit: int | None = None) -> dict:
-    name = fp.stem
-    df = load_table(fp)
-
-    # overview statistics
-    summary_csv = OUT_DIR / f"{name}_summary.csv"
-    df.describe(include="all").T.to_csv(summary_csv)
-
-    # select analyzable columns (automatic rule + upper limit)
-    cols, skipped = numeric_cols(df, limit=n_limit)
-
-    # print the reason for skipping (to console)
-    for col, reason in skipped.items():
-        print(f"[SKIP] {fp.name} :: {col} -> {reason}")
-
-    if not cols:
-        print(f"[WARN] {fp.name}: no analyzable numeric columns after filtering.")
-
-    #draw
-    pngs = []
-    for col in cols:
-        out_png = OUT_DIR / f"{name}_{col}_hist.png"
+def read_concat(files: List[Path]) -> Tuple[pd.DataFrame, List[pd.DataFrame]]:
+    """Read CSV files and concat (row-wise). Empty -> empty DF."""
+    frames: List[pd.DataFrame] = []
+    for fp in files:
         try:
-            plot_hist(df, col, out_png)
-            pngs.append(out_png.name)
+            df = pd.read_csv(fp)
+            df["__source_file__"] = fp.name
+            frames.append(df)
+            print(f"[load] {fp} -> shape={df.shape}")
         except Exception as e:
-            pngs.append(f"(failed: {col} -> {e})")
-            
-    # Report (adding the numeric clumns: hint + more）
-    lines = [
-        f"### {fp.name}",
-        f"- rows: **{df.shape[0]}**, cols: **{df.shape[1]}**",
-        f"- numeric columns: `{', '.join(cols)}`",
-        f"- summary: `reports/{summary_csv.name}`",
-        "",
-        "#### Distributions",
-    ]
-    for p in pngs:
-        if p.endswith(".png"):
-            lines.append(f"![](./{p})")
-        else:
-            lines.append(f"- {p}")
+            print(f"[warn] failed reading {fp}: {e}")
 
-    return {
-        "data_file": str(fp),
-        "summary_csv": str(summary_csv),
-        "plots": pngs,
-        "report_md": "\n".join(lines),
-    }
+    if frames:
+        df_all = pd.concat(frames, axis=0, ignore_index=True)
+    else:
+        df_all = pd.DataFrame()
+
+    return df_all, frames
+
+
+def safe_shape(df: Optional[pd.DataFrame], frames: Optional[List[pd.DataFrame]] = None) -> Tuple[int, int]:
+    """Return (rows, cols), robust even if df is None/invalid."""
+    try:
+        if isinstance(df, pd.DataFrame):
+            r, c = df.shape
+            return int(r), int(c)
+    except Exception:
+        pass
+
+    if frames:
+        try:
+            tmp = pd.concat(frames, axis=0, ignore_index=True)
+            r, c = tmp.shape
+            return int(r), int(c)
+        except Exception:
+            pass
+    return (0, 0)
+
+
+def numeric_cols(df: pd.DataFrame) -> List[str]:
+    if df is None or df.empty:
+        return []
+    num = df.select_dtypes(include=[np.number]).columns.tolist()
+    # drop the helper col if numeric by accident
+    return [c for c in num if c != "__source_file__"]
+
+
+def plot_numeric_histograms(df: pd.DataFrame, cols: List[str], n_limit: int) -> List[str]:
+    """Return list of saved image paths (relative to reports/)."""
+    saved = []
+    if not cols:
+        return saved
+    if n_limit and n_limit > 0:
+        cols = cols[: n_limit]
+
+    for col in cols:
+        try:
+            series = pd.to_numeric(df[col], errors="coerce").dropna()
+            if series.empty:
+                continue
+            plt.figure(figsize=(6, 4))
+            plt.hist(series, bins=30)
+            plt.title(f"Histogram: {col}")
+            plt.xlabel(col)
+            plt.ylabel("Count")
+            out = IMG_DIR / f"hist_{re.sub(r'[^A-Za-z0-9_]+','_', col)}.png"
+            plt.tight_layout()
+            plt.savefig(out)
+            plt.close()
+            saved.append(str(out.relative_to(REPORTS_DIR)))
+            print(f"[plot] {col} -> {out}")
+        except Exception as e:
+            print(f"[warn] failed plotting {col}: {e}")
+    return saved
+
+
+def md_escape(text: str) -> str:
+    return str(text).replace("<", "&lt;").replace(">", "&gt;")
+
+
+def build_markdown_summary(targets: List[Path], df: pd.DataFrame, frames: List[pd.DataFrame], img_rel: List[str], n_limit: int) -> str:
+    rows, cols = safe_shape(df, frames)
+    tgt_list = ", ".join([f"`{t.name}`" for t in targets]) if targets else "_<none>_"
+    lines = []
+    lines.append(f"**Targets:** [{tgt_list}]")
+    lines.append(f"**Rows:** **{rows}**, **Cols:** **{cols}**  ")
+    if df is not None and not df.empty:
+        lines.append(f"**Numeric columns found:** {len(numeric_cols(df))}")
+        if n_limit and n_limit > 0:
+            lines.append(f"**Plotted (limit n):** {n_limit}")
+    else:
+        lines.append("_No data loaded; generated empty report._")
+
+    if img_rel:
+        lines.append("\n**Figures:**")
+        for rel in img_rel:
+            lines.append(f"![](./{rel})")
+    return "\n".join(lines)
+
+
+def write_qd_files(summary_md: str, title: str = "Noema Report") -> None:
+    """Create minimal, valid .qd files that Quarkdown can compile."""
+    noema_qd = f"""---
+title: {md_escape(title)}
+author: Noema-Bot
+---
+
+# Summary
+
+{summary_md}
+
+---
+
+# Notes
+
+- This is an auto-generated report.
+- Edit `scripts/analyze.py` to customize sections & visuals.
+
+"""
+    (REPORTS_DIR / "noema-report.qd").write_text(noema_qd, encoding="utf-8")
+
+    dashboard_qd = f"""---
+title: Noema Dashboard
+author: Noema-Bot
+---
+
+# Dashboard
+
+- [Full report](./report.html)
+- Raw summary is embedded below.
+
+## Quick Summary
+
+{summary_md}
+
+"""
+    (REPORTS_DIR / "dashboard.qd").write_text(dashboard_qd, encoding="utf-8")
+
 
 def main():
-    # Supports optional single-file analysis, can be passed through the environment variable FILE=xxx.csv
-    # 2025-10-28, adding --n
     parser = argparse.ArgumentParser()
-    parser.add_argument("--n", type=int, default=0, help="最多分析多少列；0 表示全部可分析列")
-    args, _ = parser.parse_known_args()
-    n_limit = None if args.n == 0 else args.n
-    
-    only = os.getenv("FILE", "").strip()
-    targets = []
-    if only:
-        p = DATA_DIR / only
-        if not p.exists():
-            print(f"[WARN] {p} not found under data/. Fallback to all files.")
-        else:
-            targets = [p]
+    parser.add_argument("--n", type=int, default=0, help="Max numeric columns to plot (0 = all)")
+    parser.add_argument("--file", type=str, default="", help="Optional CSV file under data/ (empty = auto)")
+    args = parser.parse_args()
 
-    if not targets:
-        targets = [p for p in DATA_DIR.glob("**/*") if p.suffix.lower() in (".csv",".xls",".xlsx",".json")]
+    files = find_files(args.file)
+    print(f"Targets: {[str(p.relative_to(ROOT)) if p.exists() else str(p) for p in files]}")
+    df, frames = read_concat(files)
 
-    if not targets:
-        note = "No data files in data/. Nothing to analyze."
-        print(note)
-        Path("report_summary.json").write_text(json.dumps({"markdown": note}, ensure_ascii=False), encoding="utf-8")
-        return
-    print("Targets:", [str(p) for p in targets])
+    # plots
+    nums = numeric_cols(df)
+    img_rel = plot_numeric_histograms(df, nums, args.n)
 
-    blocks = ["## 🧪 Auto Analysis Report"]
-    outputs = []
-    for fp in targets:
-        try:
-            res = analyze_one(fp, n_limit=n_limit) #2025-10-28, adding n_limit
-            outputs.append(res)
-            blocks.append(res["report_md"])
-        except Exception as e:
-            blocks.append(f"- **{fp.name}** ❌ {e}")
-            
-    report_md = "\n\n".join(blocks)
-    (OUT_DIR / "REPORT.md").write_text(report_md, encoding="utf-8")
-    Path("report_summary.json").write_text(
-        json.dumps({"markdown": report_md, "items": outputs}, ensure_ascii=False),
-        encoding="utf-8"
-    )
-    
-    # 2025-10-28, generating Quarkdown (.qd)
-    from textwrap import dedent
+    # markdown summary
+    summary_md = build_markdown_summary(files, df, frames, img_rel, args.n)
+    (REPORTS_DIR / "REPORT.md").write_text(summary_md, encoding="utf-8")
 
-    qd = dedent(f"""\
-.docname {{Noema Report}}
-.doctype {{plain}}
-.theme {{darko}}
+    # JSON summary for workflow comment step
+    summary_json: Dict[str, Any] = {"markdown": summary_md}
+    Path(ROOT / "report_summary.json").write_text(json.dumps(summary_json, ensure_ascii=False, indent=2), encoding="utf-8")
 
-# Auto Analysis Summary (generated by Noema-Bot)
-.tableofcontents
+    # QD files for Quarkdown compile
+    write_qd_files(summary_md, title="Noema Analysis Report")
 
-{report_md}
-""")
-    (OUT_DIR / "noema-report.qd").write_text(qd, encoding="utf-8")
-    print("Writing QD to:", (OUT_DIR / "noema-report.qd"))
+    print("Writing QD to: reports/noema-report.qd")
+    print("Done.")
 
-    # === Build a simple dashboard (Markdown-only, no raw HTML) ===
-    def _slugify_anchor(name: str) -> str:
-        import re
-        return re.sub(r'[^A-Za-z0-9_-]+', '_', name).strip('_')
 
-    
-    # Report (adding the numeric columns + anchor for cross-link)
-    anchor = _slugify_anchor(fp.stem)
-    lines = [
-        f"### {fp.name} {{#{anchor}}}",
-        f"- rows: **{df.shape[0]}**, cols: **{df.shape[1]}**",
-        f"- numeric columns: `{', '.join(cols)}`",
-        f"- summary: `reports/{summary_csv.name}`",
-        "",
-        "#### Distributions",
-    ]
-    for p in pngs:
-        if p.endswith(".png"):
-            lines.append(f"![](./{p})")  
-        else:
-            lines.append(f"- {p}")
-
-     # === Build a simple dashboard (Markdown-only, no raw HTML) ===
-    cards = []
-    for item in outputs:
-        data_name = Path(item["data_file"]).name
-        anchor = _slugify_anchor(Path(item["data_file"]).stem)  # 对应 report.html 里的 ### 标题
-        thumb = next((p for p in item["plots"] if p.endswith(".png")), "")
-        md = [
-            f"### {data_name}",
-            f"Summary: `{Path(item['summary_csv']).name}`",
-            f"[Open full report →](report.html#{anchor})"
-        ]
-        if thumb:
-            md.append(f"![](./{thumb})")
-        cards.append("\n\n".join(md))
-
-    from textwrap import dedent
-    dashboard_qd = dedent(f"""\
-.docname {{Noema-Bot Dashboard}}
-.doctype {{plain}}
-.theme {{darko}}
-
-# 🧭 Report Index
-
-This dashboard lists all analyzed datasets. Click *Open full report* to jump into the full analysis.
-
-{chr(10).join(cards) if cards else "_No datasets found._"}
-""")
-    (OUT_DIR / "dashboard.qd").write_text(dashboard_qd, encoding="utf-8")
-    print("Writing QD to:", (OUT_DIR / "dashboard.qd"))
-
-    print("Analysis finished.")
-    print("== DEBUG FILE CHECK ==")
-    for f in OUT_DIR.glob("*.qd"):
-        print("Found QD:", f)
-    print("== OUT_DIR contents ==")
-    for f in OUT_DIR.iterdir():
-        print(" -", f)
-
-        
 if __name__ == "__main__":
     main()
