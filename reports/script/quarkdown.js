@@ -916,105 +916,6 @@
     }
   });
 
-  // src/main/typescript/document/handlers/persistent-headings/persistent-headings-document-handler.ts
-  var MIN_HEADING_LEVEL, MAX_HEADING_LEVEL, PersistentHeadingsDocumentHandler;
-  var init_persistent_headings_document_handler = __esm({
-    "src/main/typescript/document/handlers/persistent-headings/persistent-headings-document-handler.ts"() {
-      "use strict";
-      init_document_handler();
-      MIN_HEADING_LEVEL = 1;
-      MAX_HEADING_LEVEL = 6;
-      PersistentHeadingsDocumentHandler = class extends DocumentHandler {
-        constructor() {
-          super(...arguments);
-          /**
-           * Array storing the most recent heading HTML content at each depth level.
-           * Index 0 corresponds to h1, index 1 to h2, etc.
-           */
-          this.lastHeadingPerDepth = [];
-        }
-        /**
-         * Scans a container for headings (h1-h6) and updates the internal heading history.
-         * Only the last heading of the highest level found is stored, and lower level headings are cleared.
-         *
-         * @example
-         * If the container has:
-         * ```html
-         * <h2>Title</h2>
-         * <h3>Subtitle</h3>
-         * <h2>Another Title</h2>
-         * ```
-         *
-         * Then after calling this method, `lastHeadingPerDepth` will be:
-         * ```typescript
-         * ["", "Another Title", "", "", "", ""] // h1 is empty, h2 is "Another Title", h3 has been cleared
-         * ```
-         *
-         * @param container - The DOM element to scan for headings
-         */
-        overwriteLastHeadings(container) {
-          for (let depth = MIN_HEADING_LEVEL; depth <= MAX_HEADING_LEVEL; depth++) {
-            const headings = container.querySelectorAll(`h${depth}:not([data-decorative])`);
-            if (headings.length > 0) {
-              this.lastHeadingPerDepth[depth - 1] = headings[headings.length - 1].innerHTML;
-              this.lastHeadingPerDepth.length = depth;
-            }
-          }
-        }
-        /**
-         * Applies the stored heading content to elements with the `.last-heading` class
-         * within the specified containers. The heading content is determined by the
-         * `data-depth` attribute on each `.last-heading` element.
-         * @param containers - Array of DOM elements to process for `.last-heading` elements
-         */
-        applyLastHeadings(containers) {
-          containers.forEach((container) => {
-            const lastHeadingElements = container.querySelectorAll(".last-heading");
-            lastHeadingElements.forEach((lastHeading) => {
-              const depth = parseInt(lastHeading.dataset.depth || "0");
-              lastHeading.innerHTML = this.lastHeadingPerDepth[depth - 1] || "";
-            });
-          });
-        }
-        /**
-         * Processes heading persistence by first updating the heading history from the source container,
-         * then applying the stored headings to all target containers.
-         * @param params - Configuration object
-         * @param params.sourceContainer - The container to extract headings from
-         * @param params.targetContainers - Array of containers to apply the persistent headings to
-         */
-        apply({ sourceContainer, targetContainers }) {
-          this.overwriteLastHeadings(sourceContainer);
-          this.applyLastHeadings(targetContainers);
-        }
-      };
-    }
-  });
-
-  // src/main/typescript/document/handlers/persistent-headings/persistent-headings-slides.ts
-  var PersistentHeadingsSlides;
-  var init_persistent_headings_slides = __esm({
-    "src/main/typescript/document/handlers/persistent-headings/persistent-headings-slides.ts"() {
-      "use strict";
-      init_persistent_headings_document_handler();
-      PersistentHeadingsSlides = class extends PersistentHeadingsDocumentHandler {
-        /**
-         * Post-rendering hook that applies persistent headings to both the slide and background elements.
-         */
-        async onPostRendering() {
-          const slides = document.querySelectorAll(".reveal .slides > :is(section, .pdf-page)");
-          const backgrounds = document.querySelectorAll(".reveal > :is(.backgrounds, .pdf-page) > .slide-background");
-          slides.forEach((slide, index) => {
-            this.apply({
-              sourceContainer: slide,
-              targetContainers: [slide, backgrounds[index]].filter(Boolean)
-            });
-          });
-        }
-      };
-    }
-  });
-
   // src/main/typescript/document/handlers/page-numbers.ts
   var PageNumbers;
   var init_page_numbers = __esm({
@@ -1069,6 +970,75 @@
     }
   });
 
+  // src/main/typescript/document/handlers/persistent-headings.ts
+  var MIN_HEADING_LEVEL, MAX_HEADING_LEVEL, PersistentHeadings;
+  var init_persistent_headings = __esm({
+    "src/main/typescript/document/handlers/persistent-headings.ts"() {
+      "use strict";
+      init_document_handler();
+      MIN_HEADING_LEVEL = 1;
+      MAX_HEADING_LEVEL = 6;
+      PersistentHeadings = class extends DocumentHandler {
+        constructor() {
+          super(...arguments);
+          /**
+           * Array storing the most recent heading HTML content at each depth level.
+           * Index 0 corresponds to h1, index 1 to h2, etc.
+           */
+          this.lastHeadingPerDepth = [];
+        }
+        /**
+         * Scans a page for headings (h1-h6) and updates the internal heading history.
+         * Only the last heading of the highest level found is stored, and lower level headings are cleared.
+         *
+         * @example
+         * If the container has:
+         * ```html
+         * <h2>Title</h2>
+         * <h3>Subtitle</h3>
+         * <h2>Another Title</h2>
+         * ```
+         *
+         * Then after calling this method, `lastHeadingPerDepth` will be:
+         * ```typescript
+         * ["", "Another Title", "", "", "", ""] // h1 is empty, h2 is "Another Title", h3 has been cleared
+         * ```
+         *
+         * @param page - The page to scan for headings
+         */
+        overwriteLastHeadings(page) {
+          for (let depth = MIN_HEADING_LEVEL; depth <= MAX_HEADING_LEVEL; depth++) {
+            const headings = page.querySelectorAll(`h${depth}:not([data-decorative])`);
+            if (headings.length > 0) {
+              this.lastHeadingPerDepth[depth - 1] = headings[headings.length - 1].innerHTML;
+              this.lastHeadingPerDepth.length = depth;
+            }
+          }
+        }
+        /**
+         * Applies the stored heading content to elements with the `.last-heading` class
+         * within the specified containers. The heading content is determined by the
+         * `data-depth` attribute on each `.last-heading` element.
+         * @param page - The page containing `.last-heading` elements to update
+         */
+        applyLastHeadings(page) {
+          const lastHeadingElements = page.querySelectorAll(".last-heading");
+          lastHeadingElements.forEach((lastHeading) => {
+            const depth = parseInt(lastHeading.dataset.depth || "0");
+            lastHeading.innerHTML = this.lastHeadingPerDepth[depth - 1] || "";
+          });
+        }
+        async onPostRendering() {
+          const pages = this.quarkdownDocument.getPages();
+          pages.forEach((page) => {
+            this.overwriteLastHeadings(page);
+            this.applyLastHeadings(page);
+          });
+        }
+      };
+    }
+  });
+
   // src/main/typescript/document/type/slides-document.ts
   var SLIDE_SELECTOR, BACKGROUND_SELECTOR, SlidesDocument;
   var init_slides_document = __esm({
@@ -1078,8 +1048,8 @@
       init_page_chunker();
       init_page_margins_slides();
       init_footnotes_slides();
-      init_persistent_headings_slides();
       init_page_numbers();
+      init_persistent_headings();
       SLIDE_SELECTOR = ".reveal .slides > :is(section, .pdf-page)";
       BACKGROUND_SELECTOR = ".reveal :is(.backgrounds, .slides > .pdf-page) > .slide-background";
       SlidesDocument = class {
@@ -1110,7 +1080,7 @@
               querySelectorAll(query) {
                 const slideResults = slide.querySelectorAll(query);
                 const bgResults = background?.querySelectorAll(query) || [];
-                return /* @__PURE__ */ new Set([...slideResults, ...bgResults]);
+                return [...slideResults, ...Array.from(bgResults)];
               }
             };
           });
@@ -1162,8 +1132,8 @@
           return [
             new PageMarginsSlides(this),
             new PageNumbers(this),
-            new FootnotesSlides(this),
-            new PersistentHeadingsSlides(this)
+            new PersistentHeadings(this),
+            new FootnotesSlides(this)
           ];
         }
       };
@@ -1351,29 +1321,6 @@
     }
   });
 
-  // src/main/typescript/document/handlers/persistent-headings/persistent-headings-paged.ts
-  var PersistentHeadingsPaged;
-  var init_persistent_headings_paged = __esm({
-    "src/main/typescript/document/handlers/persistent-headings/persistent-headings-paged.ts"() {
-      "use strict";
-      init_persistent_headings_document_handler();
-      PersistentHeadingsPaged = class extends PersistentHeadingsDocumentHandler {
-        /**
-         * Post-rendering hook that applies persistent headings to each page.
-         */
-        async onPostRendering() {
-          const pages = document.querySelectorAll(".pagedjs_page");
-          pages.forEach((page) => {
-            this.apply({
-              sourceContainer: page,
-              targetContainers: [page]
-            });
-          });
-        }
-      };
-    }
-  });
-
   // src/main/typescript/document/handlers/show-on-ready.ts
   var ShowOnReady;
   var init_show_on_ready = __esm({
@@ -1402,9 +1349,9 @@
       init_footnotes_paged();
       init_split_code_blocks_fix_paged();
       init_column_count_paged();
-      init_persistent_headings_paged();
       init_page_numbers();
       init_show_on_ready();
+      init_persistent_headings();
       PagedDocument = class {
         /**
          * @returns The parent page of the given element.
@@ -1444,8 +1391,8 @@
             new ShowOnReady(this),
             new PageMarginsPaged(this),
             new PageNumbers(this),
+            new PersistentHeadings(this),
             new FootnotesPaged(this),
-            new PersistentHeadingsPaged(this),
             new ColumnCountPaged(this),
             new SplitCodeBlocksFixPaged(this)
           ];

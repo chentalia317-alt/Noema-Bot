@@ -1,0 +1,23 @@
+
+.docname {Noema-Bot Dashboard}
+.doctype {plain}
+.theme {darko}
+
+# 🧭 Report Index
+
+This dashboard lists all analyzed datasets. Click *Open full report* to jump into the full analysis.
+
+### baseline_cleaned_v7.csv
+
+Summary: baseline_cleaned_v7_summary.csv
+
+[Open full report →](./report.html#baselinecleanedv7csv)
+
+![](./baseline_cleaned_v7_kss_morning_hist.png)
+### intervention_B_cleaned.csv
+
+Summary: intervention_B_cleaned_summary.csv
+
+[Open full report →](./report.html#interventionbcleanedcsv)
+
+![](./intervention_B_cleaned_kss_morning_hist.png)

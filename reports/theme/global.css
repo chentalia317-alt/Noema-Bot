@@ -251,7 +251,7 @@ details > summary + p,
 .quarkdown pre {
   min-width: 20%;
 }
-.quarkdown pre:not(.stack > pre) {
+.quarkdown pre:not(.stack > pre, .box pre) {
   min-width: 100%;
 }
 .quarkdown pre code {
@@ -597,6 +597,16 @@ details > summary + p,
   --box-content-foreground-color: var(--qd-error-foreground-color);
   --box-header-foreground-color: var(--qd-error-foreground-color);
   --box-header-background-color: rgba(0, 0, 0, .1);
+}
+.quarkdown .error, .quarkdown .error p {
+  text-align: start !important;
+}
+.quarkdown .error pre {
+  background-color: var(--box-header-background-color);
+  padding: 12px;
+}
+.quarkdown .error pre code {
+  color: var(--box-header-foreground-color);
 }
 
 .quarkdown .size-tiny {
