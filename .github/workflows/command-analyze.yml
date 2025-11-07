@@ -1,25 +1,25 @@
 name: "Command: /analyze"
 
 on:
+  issue_comment:
+    types: [created]
   workflow_dispatch:
     inputs:
       file:
-        description: "Optional data file under data/ (e.g., sample.csv)"
+        description: "Optional data file under data/ (e.g., baseline_cleaned_v7.csv)"
         required: false
         default: ""
       n:
         description: "Max numeric columns to plot (0 = all)"
         required: false
         default: "0"
-  issue_comment:
-    types: [created]
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
   issues: write
   pull-requests: write
+  pages: write
+  id-token: write
 
 concurrency:
   group: "pages"
@@ -27,131 +27,120 @@ concurrency:
 
 jobs:
   run:
+    if: >-
+      ${{
+        github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'issue_comment' &&
+         github.event.issue.pull_request == null &&
+         startsWith(github.event.comment.body, '/analyze'))
+      }}
     runs-on: ubuntu-latest
     environment: github-pages
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
-
-      - name: Gate
-        id: gate
-        shell: bash
-        run: |
-          set -euo pipefail
-          RUN=0
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            RUN=1
-            echo "Gate: workflow_dispatch -> proceed"
-          else
-            RAW="${{ github.event.comment.body }}"
-            echo "Gate RAW: <<$RAW>>"
-            if printf '%s' "$RAW" | grep -q '/analyze'; then
-              RUN=1
-              echo "Gate: /analyze found -> proceed"
-            else
-              echo "Gate: no /analyze -> skip subsequent steps"
-            fi
-          fi
-          echo "run=$RUN" >> "$GITHUB_OUTPUT"
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
-        if: ${{ steps.gate.outputs.run == '1' }}
         uses: actions/setup-python@v5
-        with: { python-version: "3.11" }
+        with:
+          python-version: "3.11"
 
       - name: Install Python deps
-        if: ${{ steps.gate.outputs.run == '1' }}
         run: |
           python -m pip install -U pip
-          if [ -f requirements.txt ]; then
-            pip install -r requirements.txt
-          else
-            pip install pandas numpy matplotlib
-          fi
+          pip install -r requirements.txt
 
       - name: Resolve args (FILE & N)
-        if: ${{ steps.gate.outputs.run == '1' }}
         id: args
         shell: bash
         run: |
           set -euo pipefail
           FILE_INPUT=""
           N_INPUT="0"
+
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             FILE_INPUT="${{ inputs.file }}"
             N_INPUT="${{ inputs.n }}"
           else
             RAW="${{ github.event.comment.body }}"
+            # extract file=xxx (alnum, dot, slash, dash, underscore)
             FILE_INPUT="$(printf '%s' "$RAW" | sed -n 's/.*file=\([A-Za-z0-9._\/-]\+\).*/\1/p' || true)"
-            N_INPUT="$(printf '%s'   "$RAW" | sed -n 's/.*[[:<:]]n=\([0-9]\+\).*/\1/p' || echo 0)"
+            # extract n=NN
+            N_INPUT="$(printf '%s' "$RAW" | sed -n 's/.*[[:<:]]n=\([0-9]\+\).*/\1/p' || echo 0)"
           fi
-          echo "file=${FILE_INPUT}" >> "$GITHUB_OUTPUT"
-          echo "n=${N_INPUT}"       >> "$GITHUB_OUTPUT"
+
+          echo "file=$FILE_INPUT"     >> "$GITHUB_OUTPUT"
+          echo "n=$N_INPUT"           >> "$GITHUB_OUTPUT"
           echo "Resolved: FILE='${FILE_INPUT:-<ALL>}'  N='${N_INPUT}'"
 
-      - name: Run analysis (generate reports/*.png, REPORT.md, *.qd)
-        if: ${{ steps.gate.outputs.run == '1' }}
+      - name: Run analysis
         env:
           FILE: ${{ steps.args.outputs.file }}
-          CLEAN: "1"
-          SHOW_SUMMARY: "0"
         run: |
           python scripts/analyze.py --n "${{ steps.args.outputs.n }}"
-          echo "== reports ==" && ls -la reports || true
+
+      - name: Read summary (install jq)
+        id: summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -y
+          sudo apt-get install -y jq
+          MD="$(jq -r '.markdown' report_summary.json)"
+          {
+            echo 'md<<__MD__'
+            printf '%s\n' "$MD"
+            echo '__MD__'
+          } >> "$GITHUB_OUTPUT"
 
       # ---- Quarkdown rendering (needs Java 17+) ----
       - name: Set up Java 17
-        if: ${{ steps.gate.outputs.run == '1' }}
         uses: actions/setup-java@v4
         with:
-          distribution: temurin
+          distribution: 'temurin'
           java-version: '17'
 
       - name: Install Quarkdown CLI
-        if: ${{ steps.gate.outputs.run == '1' }}
         run: |
           curl -fsSL https://raw.githubusercontent.com/quarkdown-labs/get-quarkdown/refs/heads/main/install.sh | sudo env "PATH=$PATH" bash
           quarkdown --version || true
 
-      - name: Compile .qd to HTML (dashboard & full report)
-        if: ${{ steps.gate.outputs.run == '1' }}
-        shell: bash
+      - name: Verify outputs exist
         run: |
-          set -euo pipefail
+          echo "== repo root ==" && ls -la
+          echo "== reports dir ==" && ls -la reports || true
+
+      - name: Compile .qd to HTML (dashboard & full report)
+        run: |
+          set -e
           mkdir -p reports
+          echo "== Checking reports dir ==" && ls -la reports || true
+          echo "== Checking QD files ==" && find reports -type f -name "*.qd" || true
 
-          # the same path as analyze.py 
-          if [ ! -f ./reports/noema-report.qd ]; then
-            cat > ./reports/noema-report.qd <<'QEND'
-.docname {Noema Report}
-.doctype {plain}
-.theme {darko}
-
-# Summary
-{{ include "./REPORT.md" }}
-
-# Plots
-{{ glob "./*.png" | gallery }}
-QEND
-          fi
-
-          # 1) Full report to reports/report.html
-          quarkdown c ./reports/noema-report.qd -o ./reports
-          if [ -f ./reports/index.html ]; then
-            mv ./reports/index.html ./reports/report.html
-          else
-            FULL_DIR=$(find ./reports -maxdepth 2 -type f -name index.html -printf '%h\n' | head -n1)
-            if [ -n "$FULL_DIR" ] && [ "$FULL_DIR" != "./reports" ]; then
-              mv "$FULL_DIR/index.html" ./reports/report.html
-              [ -d "$FULL_DIR/script" ] && cp -r "$FULL_DIR/script" ./reports/
-              [ -d "$FULL_DIR/theme" ] && cp -r "$FULL_DIR/theme" ./reports/
-              rm -rf "$FULL_DIR"
+          # 1) Full report -> reports/report.html (+ assets)
+          if [ -f ./reports/noema-report.qd ]; then
+            quarkdown c ./reports/noema-report.qd -o ./reports
+            if [ -f ./reports/index.html ]; then
+              mv ./reports/index.html ./reports/report.html
+            else
+              FULL_DIR=$(find ./reports -maxdepth 2 -type f -name index.html -printf '%h\n' | head -n1)
+              if [ -n "$FULL_DIR" ] && [ "$FULL_DIR" != "./reports" ]; then
+                mv "$FULL_DIR/index.html" ./reports/report.html
+                [ -d "$FULL_DIR/script" ] && cp -r "$FULL_DIR/script" ./reports/
+                [ -d "$FULL_DIR/theme" ] && cp -r "$FULL_DIR/theme" ./reports/
+                rm -rf "$FULL_DIR"
+              fi
             fi
+          else
+            echo "::error::reports/noema-report.qd not found"
+            ls -Rla
+            exit 1
           fi
 
-          # 2) Dashboard to reports/index.html
+          # 2) Dashboard -> reports/index.html (+ assets)
           if [ -f ./reports/dashboard.qd ]; then
             quarkdown c ./reports/dashboard.qd -o ./reports
             if [ ! -f ./reports/index.html ]; then
@@ -164,25 +153,33 @@ QEND
               fi
             fi
           else
+            echo "dashboard.qd not found, fallback to report.html as index"
             cp -f ./reports/report.html ./reports/index.html
           fi
 
           touch ./reports/.nojekyll
-          echo "== final reports tree ==" && ls -Rla ./reports
+          echo "== final reports tree =="
+          ls -Rla ./reports
+
+      - name: Commit reports back
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add reports/ report_summary.json
+          git commit -m "chore: update analysis artifacts [skip ci]" || echo "no changes"
+          git push
 
       - name: Upload artifact (reports/)
-        if: ${{ steps.gate.outputs.run == '1' }}
         uses: actions/upload-pages-artifact@v3
         with:
           path: reports
 
       - name: Deploy to GitHub Pages
-        if: ${{ steps.gate.outputs.run == '1' }}
         id: deploy
         uses: actions/deploy-pages@v4
 
       - name: Comment back as Noema-Bot
-        if: ${{ steps.gate.outputs.run == '1' && github.event_name == 'issue_comment' }}
+        if: ${{ github.event_name == 'issue_comment' }}
         uses: peter-evans/create-or-update-comment@v4
         with:
           token: ${{ secrets.BOT_TOKEN || secrets.GITHUB_TOKEN }}
@@ -198,3 +195,6 @@ QEND
 
             **Raw markdown summary (repo):**
             https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/reports/REPORT.md
+
+            ---
+            ${{ steps.summary.outputs.md }}
