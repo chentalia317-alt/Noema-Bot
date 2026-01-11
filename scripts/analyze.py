@@ -153,4 +153,5 @@ def build_markdown_summary(targets: List[Path], df: pd.DataFrame, img_rel: List[
 
     if img_rel:
         lines.append("\n### 📊 Visualizations")
-        for rel in img_
+        for rel in img_rel: 
+            lines.append(f"![Histogram of column](./{rel})")
