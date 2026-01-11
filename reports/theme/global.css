@@ -13,26 +13,44 @@ body.quarkdown.quarkdown-plain {
   margin: 32px 0;
 }
 body.quarkdown.quarkdown-plain > main {
-  width: 100%;
+  width: min(100%, 90ch);
   column-count: var(--qd-column-count);
 }
 body.quarkdown.quarkdown-plain > aside {
   max-width: 30vw;
   width: 30vw;
-  margin: 0 12px;
+  --aside-outer-margin: 12px;
+  --aside-inner-margin: calc(var(--aside-outer-margin) * 2);
+  margin: 0 var(--aside-outer-margin);
 }
 body.quarkdown.quarkdown-plain > aside#margin-area-left {
-  margin-right: 24px;
+  margin-right: var(--aside-inner-margin);
 }
 body.quarkdown.quarkdown-plain > aside#margin-area-right {
-  margin-left: 24px;
+  margin-left: var(--aside-inner-margin);
 }
 @media screen and (max-width: 800px), print and (max-width: 1000px) {
-  body.quarkdown.quarkdown-plain aside#margin-area-left {
-    max-width: 0;
+  body.quarkdown.quarkdown-plain {
+    flex-direction: column;
+    padding: 0 16px;
   }
-  body.quarkdown.quarkdown-plain aside#margin-area-right:empty {
-    max-width: 0;
+  body.quarkdown.quarkdown-plain > * {
+    font-size: 1.1em;
+  }
+  body.quarkdown.quarkdown-plain > main {
+    width: 100%;
+  }
+  body.quarkdown.quarkdown-plain > aside#margin-area-left {
+    display: none;
+  }
+  body.quarkdown.quarkdown-plain > aside#margin-area-right {
+    --aside-inner-margin: 0;
+    max-width: none;
+    width: auto;
+    margin-top: 16px;
+  }
+  body.quarkdown.quarkdown-plain > aside#margin-area-right .footnote-definition {
+    margin-top: 0.5em !important;
   }
 }
 body.quarkdown.quarkdown-slides .reveal .slides {
@@ -77,6 +95,10 @@ body.quarkdown.quarkdown-paged .pagedjs_area {
 .quarkdown caption, .quarkdown figcaption {
   text-align: var(--qd-horizontal-alignment-local);
   text-align-last: center;
+}
+.quarkdown formula {
+  text-align: initial;
+  text-align-last: initial;
 }
 
 .quarkdown-slides {
@@ -738,15 +760,30 @@ details > summary + p,
   text-align: start;
 }
 .quarkdown nav ol {
+  flex-basis: 100%;
+  width: 100%;
   list-style-position: inside;
   margin: 0 0 0 1em;
 }
 .quarkdown nav ol:not(ol ol) {
   padding-left: 0;
 }
-.quarkdown nav li a::after {
-  content: target-counter(attr(href), page);
-  float: right;
+.quarkdown nav li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+}
+.quarkdown nav li a {
+  display: flex;
+  flex-grow: 1;
+  align-items: baseline;
+}
+.quarkdown nav li a .toc-page-number {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+.quarkdown nav li a .toc-page-number:empty, .quarkdown nav li a .toc-page-number[data-empty] {
+  display: none;
 }
 
 .quarkdown-slides nav:not(.pdf-page nav) {
@@ -943,7 +980,12 @@ details > summary + p,
     display: none;
   }
 }
-@media screen and (min-aspect-ratio: 1.3), pagedjs-ignore {
+@media screen and (max-width: 800px) {
+  .sidebar {
+    display: none;
+  }
+}
+@media screen and (min-width: 801px), pagedjs-ignore {
   .sidebar {
     display: block !important;
   }

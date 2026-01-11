@@ -174,13 +174,17 @@
       }
     };
   }
+  function getHeadings() {
+    const selection = document.querySelectorAll("h1, h2, h3");
+    return Array.from(selection).filter((header) => !header.hasAttribute("data-decorative"));
+  }
   function populateNavigationItems(sidebarList) {
     let currentActiveListItem = null;
     const getCurrentActiveItem = () => currentActiveListItem;
     const setCurrentActiveItem = (item) => {
       currentActiveListItem = item;
     };
-    document.querySelectorAll("h1, h2, h3").forEach((header) => {
+    getHeadings().forEach((header) => {
       const listItem = createNavigationItem(header);
       sidebarList.appendChild(listItem);
       const checkForActive = createActiveStateChecker(
@@ -796,30 +800,42 @@
       "use strict";
       init_document_handler();
       PageMarginsDocumentHandler = class extends DocumentHandler {
-        constructor() {
-          super(...arguments);
-          /** Array of page margin initializer elements collected from the document */
-          this.pageMarginInitializers = [];
+        /**
+         * @param page The page or element to get initializers from
+         * @return An array of page margin initializer elements within the given page
+         */
+        selectPageMarginInitializers(page) {
+          return Array.from(page.querySelectorAll(".page-margin-content"));
         }
         /**
-         * Collects all page margin content initializers and removes them from the document.
+         * Collects all page margin content initializers and hides them from the document.
          * This prevents them from being displayed before proper positioning.
          */
         async onPreRendering() {
-          this.pageMarginInitializers = Array.from(document.querySelectorAll(".page-margin-content"));
-          this.pageMarginInitializers.forEach((initializer) => initializer.remove());
+          this.selectPageMarginInitializers(document.body).forEach((initializer) => initializer.style.display = "none");
         }
         /**
          * Called after the main rendering process is complete,
          * this function is responsible for injecting page margin content
          * into the document at appropriate locations on each page.
+         *
+         * It processes each page, and stores active margin initializers.
+         * Since #281, a page margin begins appearing from the page where the initializer is defined,
+         * and continues to appear on subsequent pages unless overridden.
          */
         async onPostRendering() {
+          const activeByPosition = /* @__PURE__ */ new Map();
           this.quarkdownDocument.getPages().forEach((page) => {
-            this.pageMarginInitializers.forEach((initializer) => {
+            const localInitializers = this.selectPageMarginInitializers(page);
+            localInitializers.forEach((initializer) => {
+              activeByPosition.set(initializer.className, initializer);
+              initializer.remove();
+            });
+            activeByPosition.forEach((initializer) => {
               const marginPositionName = this.getMarginPositionName(initializer, page);
-              if (!marginPositionName) return;
-              this.apply(initializer, page, marginPositionName);
+              if (marginPositionName) {
+                this.apply(initializer, page, marginPositionName);
+              }
             });
           });
         }
@@ -916,12 +932,34 @@
     }
   });
 
+  // src/main/typescript/util/id.ts
+  function getAnchorTargetId(link) {
+    const href = link.getAttribute("href");
+    if (!href || !href.startsWith("#")) {
+      return void 0;
+    }
+    let decoded;
+    try {
+      decoded = decodeURIComponent(href);
+    } catch {
+      return void 0;
+    }
+    const id = decoded.slice(1);
+    return id.length > 0 ? id : void 0;
+  }
+  var init_id = __esm({
+    "src/main/typescript/util/id.ts"() {
+      "use strict";
+    }
+  });
+
   // src/main/typescript/document/handlers/page-numbers.ts
   var PageNumbers;
   var init_page_numbers = __esm({
     "src/main/typescript/document/handlers/page-numbers.ts"() {
       "use strict";
       init_document_handler();
+      init_id();
       PageNumbers = class extends DocumentHandler {
         /**
          * Gets all elements that display the total page count.
@@ -939,6 +977,12 @@
           return page.querySelectorAll(".current-page-number");
         }
         /**
+         * Finds all page number reset markers contained in the given page.
+         */
+        getPageNumberResetMarkers(page) {
+          return Array.from(page.querySelectorAll(".page-number-reset"));
+        }
+        /**
          * Updates all total page number elements with the total count of pages.
          */
         updateTotalPageNumbers(pages) {
@@ -948,15 +992,54 @@
           });
         }
         /**
-         * Updates all current page number elements with their respective page indices.
+         * Updates all current page number elements with their respective (possibly reset) page numbers.
          */
         updateCurrentPageNumbers(pages) {
+          let pageNumber = 1;
           pages.forEach((page) => {
-            const number = this.quarkdownDocument.getPageNumber(page);
-            this.getCurrentPageNumberElements(page).forEach((pageNumber) => {
-              pageNumber.innerText = number.toString();
+            const resetMarkers = this.getPageNumberResetMarkers(page);
+            resetMarkers.forEach((marker) => {
+              const requested = parseInt(marker.dataset.start || "1", 10);
+              if (Number.isFinite(requested) && requested > 0) {
+                pageNumber = requested;
+              }
+            });
+            this.getCurrentPageNumberElements(page).forEach((pageNumberElement) => {
+              pageNumberElement.innerText = pageNumber.toString();
+              this.quarkdownDocument.setDisplayPageNumber(page, pageNumber);
+            });
+            pageNumber += 1;
+          });
+        }
+        /**
+         * Updates table of contents entries so they display the logical (reset-aware) page numbers.
+         */
+        updateTableOfContentsPageNumbers() {
+          const tocs = document.querySelectorAll('nav[data-role="table-of-contents"]');
+          tocs.forEach((nav) => {
+            nav.querySelectorAll(':scope a[href^="#"]').forEach((anchor) => {
+              const targetId = getAnchorTargetId(anchor);
+              const target = targetId ? document.getElementById(targetId) : void 0;
+              const displayNumber = target ? this.quarkdownDocument.getPageNumber(this.quarkdownDocument.getPage(target)) : void 0;
+              this.setTableOfContentsPageNumber(anchor, displayNumber?.toString());
             });
           });
+        }
+        /**
+         * Sets or updates the page number badge within a table of contents entry.
+         * @param anchor - The anchor element representing the TOC entry
+         * @param value - The page number to set (if undefined, the badge will be created but left empty)
+         */
+        setTableOfContentsPageNumber(anchor, value) {
+          let badge = anchor.querySelector(".toc-page-number");
+          if (!badge) {
+            badge = document.createElement("span");
+            badge.className = "toc-page-number";
+            anchor.appendChild(badge);
+          }
+          if (value) {
+            badge.innerText = value;
+          }
         }
         /**
          * Updates both total and current page numbers after rendering completes.
@@ -965,6 +1048,7 @@
           const pages = this.quarkdownDocument.getPages();
           this.updateTotalPageNumbers(pages);
           this.updateCurrentPageNumbers(pages);
+          this.updateTableOfContentsPageNumbers();
         }
       };
     }
@@ -1085,15 +1169,25 @@
             };
           });
         }
-        getPageNumber(page) {
+        getPageNumber(page, includeDisplayNumbers = true) {
           const slide = page.slide;
+          const displayNumber = includeDisplayNumbers ? slide.dataset.displayPageNumber : void 0;
+          if (displayNumber) {
+            return parseInt(displayNumber, 10);
+          }
           if (!slide.parentElement) return 0;
           const index = Array.from(slide.parentElement.children).indexOf(slide);
           return index + 1;
         }
         getPageType(page) {
-          const pageNumber = this.getPageNumber(page);
+          const pageNumber = this.getPageNumber(page, false);
           return pageNumber % 2 === 0 ? "left" : "right";
+        }
+        getPage(element) {
+          return this.getPages().find((page) => page.slide === this.getParentViewport(element));
+        }
+        setDisplayPageNumber(page, pageNumber) {
+          page.slide.setAttribute("data-display-page-number", pageNumber.toString());
         }
         /** Sets up pre-rendering to execute when DOM content is loaded */
         setupPreRenderingHook() {
@@ -1362,11 +1456,20 @@
         getPages() {
           return Array.from(document.querySelectorAll(".pagedjs_page"));
         }
-        getPageNumber(page) {
-          return parseInt(page.dataset.pageNumber || "0");
+        getPage(element) {
+          return element.closest(".pagedjs_page") || void 0;
+        }
+        getPageNumber(page, includeDisplayNumbers = true) {
+          console.log("Getting page number for page:", page.dataset);
+          return parseInt(
+            (includeDisplayNumbers ? page.dataset.displayPageNumber : void 0) ?? page.dataset.pageNumber ?? "0"
+          );
         }
         getPageType(page) {
           return page.classList.contains("pagedjs_right_page") ? "right" : "left";
+        }
+        setDisplayPageNumber(page, pageNumber) {
+          page.setAttribute("data-display-page-number", pageNumber.toString());
         }
         /** Sets up pre-rendering to execute when DOM content is loaded. */
         setupPreRenderingHook() {
