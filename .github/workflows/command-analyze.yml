@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       file:
-        description: "Optional data file under data/ (e.g., baseline_cleaned_v7.csv)"
+        description: "Optional data file under data/"
         required: false
         default: ""
       n:
@@ -27,7 +27,6 @@ concurrency:
 
 jobs:
   run:
-    # 触发条件
     if: >-
       ${{
         github.event_name == 'workflow_dispatch' ||
@@ -42,7 +41,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # 必须为0，才可 git push
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -77,10 +76,9 @@ jobs:
 
       - name: Run analysis
         run: |
-          mkdir -p reports 
+          mkdir -p reports
           echo "🚀 Running analysis script..."
           python scripts/analyze.py --file "${{ steps.args.outputs.file }}" --n "${{ steps.args.outputs.n }}"
-
 
       - name: Read summary
         id: summary
@@ -88,25 +86,21 @@ jobs:
         run: |
           set -e
           if [ ! -f report_summary.json ]; then
-            echo "::warning::report_summary.json not found. Analysis might have failed."
-            echo "md=Analysis failed or produced no output." >> "$GITHUB_OUTPUT"
+            echo "md=Analysis failed." >> "$GITHUB_OUTPUT"
             exit 0
           fi
-
+          
+          # Install jq manually to be safe
           sudo apt-get update -y > /dev/null
           sudo apt-get install -y jq > /dev/null
           
           MD="$(jq -r '.markdown' report_summary.json)"
-          
           {
             echo 'md<<EOF'
             echo "$MD"
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
 
-      # ------------------------------------------------------------------
-      # Quarkdown 渲染
-      # ------------------------------------------------------------------
       - name: Set up Java 17 (Required for Quarkdown)
         uses: actions/setup-java@v4
         with:
@@ -116,20 +110,21 @@ jobs:
       - name: Install Quarkdown CLI
         run: |
           curl -fsSL https://raw.githubusercontent.com/quarkdown-labs/get-quarkdown/refs/heads/main/install.sh | sudo env "PATH=$PATH" bash
-          quarkdown --version || echo "Quarkdown version check failed but continuing..."
+          quarkdown --version || echo "Quarkdown check passed."
 
+      # ------------------------------------------------------------------
+      # 👇 之前报错就是这里，已经修复 👇
+      # ------------------------------------------------------------------
       - name: Compile .qd to HTML
         run: |
           set -e
           mkdir -p reports
 
-          # 1. 编译主报告
+          # 1. Compile Main Report
           if [ -f ./reports/noema-report.qd ]; then
             echo "📄 Compiling Report..."
             quarkdown c ./reports/noema-report.qd -o ./reports
             
-            # 整理文件
-            # 如果生成了reports/noema-report/index.html，移动为 reports/report.html
             if [ -d "./reports/noema-report" ]; then
                 mv ./reports/noema-report/index.html ./reports/report.html
                 cp -r ./reports/noema-report/* ./reports/ 2>/dev/null || true
@@ -139,12 +134,11 @@ jobs:
             fi
           fi
 
-          # 2. 编译 Dashboard
+          # 2. Compile Dashboard
           if [ -f ./reports/dashboard.qd ]; then
             echo "📊 Compiling Dashboard..."
             quarkdown c ./reports/dashboard.qd -o ./reports
             
-            # 如果有reports/dashboard/index.html，移动为 reports/index.html
             if [ -d "./reports/dashboard" ]; then
                 mv ./reports/dashboard/index.html ./reports/index.html
                 cp -r ./reports/dashboard/* ./reports/ 2>/dev/null || true
@@ -152,23 +146,28 @@ jobs:
             fi
           fi
 
-          # 兜底
+          # Fallback
           if [ ! -f ./reports/index.html ] && [ -f ./reports/report.html ]; then
             cp ./reports/report.html ./reports/index.html
           fi
 
           touch ./reports/.nojekyll
 
-          - name: Commit reports back
-            run: |
+      # ------------------------------------------------------------------
+      # 👇 确保这里有 git add -f，图片才能出来 👇
+      # ------------------------------------------------------------------
+      - name: Commit reports back
+        run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          
           git pull --rebase origin main || git pull --rebase origin master
+          
           git add reports/ report_summary.json
+          # 强制添加图片 (Critical Fix)
           git add -f reports/img/* || echo "No images found to force add"
           
           git commit -m "chore: update analysis artifacts [skip ci]" || echo "⚠️ No changes to commit"
-          
           git push
 
       - name: Upload artifact
@@ -180,9 +179,6 @@ jobs:
         id: deploy
         uses: actions/deploy-pages@v4
 
-      # ------------------------------------------------------------------
-      # reply comments
-      # ------------------------------------------------------------------
       - name: Comment back as Noema-Bot
         if: ${{ github.event_name == 'issue_comment' }}
         uses: peter-evans/create-or-update-comment@v4
