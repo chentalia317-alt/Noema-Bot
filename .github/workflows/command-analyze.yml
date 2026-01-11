@@ -27,11 +27,12 @@ concurrency:
 
 jobs:
   run:
+    # 触发条件
     if: >-
       ${{
         github.event_name == 'workflow_dispatch' ||
         (github.event_name == 'issue_comment' &&
-         github.event.issue.pull_request == null &&
+         !github.event.issue.pull_request &&
          startsWith(github.event.comment.body, '/analyze'))
       }}
     runs-on: ubuntu-latest
@@ -41,7 +42,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0 # 必须为0，才可 git push
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -51,7 +52,7 @@ jobs:
       - name: Install Python deps
         run: |
           python -m pip install -U pip
-          pip install -r requirements.txt
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
       - name: Resolve args (FILE & N)
         id: args
@@ -66,38 +67,47 @@ jobs:
             N_INPUT="${{ inputs.n }}"
           else
             RAW="${{ github.event.comment.body }}"
-            # extract file=xxx (alnum, dot, slash, dash, underscore)
-            FILE_INPUT="$(printf '%s' "$RAW" | sed -n 's/.*file=\([A-Za-z0-9._\/-]\+\).*/\1/p' || true)"
-            # extract n=NN
-            N_INPUT="$(printf '%s' "$RAW" | sed -n 's/.*[[:<:]]n=\([0-9]\+\).*/\1/p' || echo 0)"
+            FILE_INPUT=$(echo "$RAW" | grep -oP 'file=\K[\w\.\-\/]+' || echo "")
+            N_INPUT=$(echo "$RAW" | grep -oP 'n=\K\d+' || echo "0")
           fi
 
           echo "file=$FILE_INPUT"     >> "$GITHUB_OUTPUT"
           echo "n=$N_INPUT"           >> "$GITHUB_OUTPUT"
-          echo "Resolved: FILE='${FILE_INPUT:-<ALL>}'  N='${N_INPUT}'"
+          echo "✅ Resolved: FILE='${FILE_INPUT:-<ALL>}'  N='${N_INPUT}'"
 
       - name: Run analysis
-        env:
-          FILE: ${{ steps.args.outputs.file }}
         run: |
-          python scripts/analyze.py --n "${{ steps.args.outputs.n }}"
+          mkdir -p reports 
+          echo "🚀 Running analysis script..."
+          python scripts/analyze.py --file "${{ steps.args.outputs.file }}" --n "${{ steps.args.outputs.n }}"
 
-      - name: Read summary (install jq)
+
+      - name: Read summary
         id: summary
         shell: bash
         run: |
-          set -euo pipefail
-          sudo apt-get update -y
-          sudo apt-get install -y jq
+          set -e
+          if [ ! -f report_summary.json ]; then
+            echo "::warning::report_summary.json not found. Analysis might have failed."
+            echo "md=Analysis failed or produced no output." >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          sudo apt-get update -y > /dev/null
+          sudo apt-get install -y jq > /dev/null
+          
           MD="$(jq -r '.markdown' report_summary.json)"
+          
           {
-            echo 'md<<__MD__'
-            printf '%s\n' "$MD"
-            echo '__MD__'
+            echo 'md<<EOF'
+            echo "$MD"
+            echo 'EOF'
           } >> "$GITHUB_OUTPUT"
 
-      # ---- Quarkdown rendering (needs Java 17+) ----
-      - name: Set up Java 17
+      # ------------------------------------------------------------------
+      # Quarkdown 渲染
+      # ------------------------------------------------------------------
+      - name: Set up Java 17 (Required for Quarkdown)
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
@@ -106,70 +116,65 @@ jobs:
       - name: Install Quarkdown CLI
         run: |
           curl -fsSL https://raw.githubusercontent.com/quarkdown-labs/get-quarkdown/refs/heads/main/install.sh | sudo env "PATH=$PATH" bash
-          quarkdown --version || true
+          quarkdown --version || echo "Quarkdown version check failed but continuing..."
 
-      - name: Verify outputs exist
-        run: |
-          echo "== repo root ==" && ls -la
-          echo "== reports dir ==" && ls -la reports || true
-
-      - name: Compile .qd to HTML (dashboard & full report)
+      - name: Compile .qd to HTML
         run: |
           set -e
           mkdir -p reports
-          echo "== Checking reports dir ==" && ls -la reports || true
-          echo "== Checking QD files ==" && find reports -type f -name "*.qd" || true
 
-          # 1) Full report -> reports/report.html (+ assets)
+          # 1. 编译主报告
           if [ -f ./reports/noema-report.qd ]; then
+            echo "📄 Compiling Report..."
             quarkdown c ./reports/noema-report.qd -o ./reports
-            if [ -f ./reports/index.html ]; then
-              mv ./reports/index.html ./reports/report.html
-            else
-              FULL_DIR=$(find ./reports -maxdepth 2 -type f -name index.html -printf '%h\n' | head -n1)
-              if [ -n "$FULL_DIR" ] && [ "$FULL_DIR" != "./reports" ]; then
-                mv "$FULL_DIR/index.html" ./reports/report.html
-                [ -d "$FULL_DIR/script" ] && cp -r "$FULL_DIR/script" ./reports/
-                [ -d "$FULL_DIR/theme" ] && cp -r "$FULL_DIR/theme" ./reports/
-                rm -rf "$FULL_DIR"
-              fi
+            
+            # 整理文件
+            # 如果生成了reports/noema-report/index.html，移动为 reports/report.html
+            if [ -d "./reports/noema-report" ]; then
+                mv ./reports/noema-report/index.html ./reports/report.html
+                cp -r ./reports/noema-report/* ./reports/ 2>/dev/null || true
+                rm -rf ./reports/noema-report
+            elif [ -f "./reports/index.html" ]; then
+                mv ./reports/index.html ./reports/report.html
             fi
-          else
-            echo "::error::reports/noema-report.qd not found"
-            ls -Rla
-            exit 1
           fi
 
-          # 2) Dashboard -> reports/index.html (+ assets)
+          # 2. 编译 Dashboard
           if [ -f ./reports/dashboard.qd ]; then
+            echo "📊 Compiling Dashboard..."
             quarkdown c ./reports/dashboard.qd -o ./reports
-            if [ ! -f ./reports/index.html ]; then
-              DASH_DIR=$(find ./reports -maxdepth 2 -type f -name index.html -printf '%h\n' | head -n1)
-              if [ -n "$DASH_DIR" ] && [ "$DASH_DIR" != "./reports" ]; then
-                mv "$DASH_DIR/index.html" ./reports/index.html
-                [ -d "$DASH_DIR/script" ] && cp -r "$DASH_DIR/script" ./reports/
-                [ -d "$DASH_DIR/theme" ] && cp -r "$DASH_DIR/theme" ./reports/
-                rm -rf "$DASH_DIR"
-              fi
+            
+            # 如果有reports/dashboard/index.html，移动为 reports/index.html
+            if [ -d "./reports/dashboard" ]; then
+                mv ./reports/dashboard/index.html ./reports/index.html
+                cp -r ./reports/dashboard/* ./reports/ 2>/dev/null || true
+                rm -rf ./reports/dashboard
             fi
-          else
-            echo "dashboard.qd not found, fallback to report.html as index"
-            cp -f ./reports/report.html ./reports/index.html
+          fi
+
+          # 兜底
+          if [ ! -f ./reports/index.html ] && [ -f ./reports/report.html ]; then
+            cp ./reports/report.html ./reports/index.html
           fi
 
           touch ./reports/.nojekyll
-          echo "== final reports tree =="
-          ls -Rla ./reports
 
+      # ------------------------------------------------------------------
+      # 提交结果 增加了rebase
+      # ------------------------------------------------------------------
       - name: Commit reports back
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          
+          git pull --rebase origin main || git pull --rebase origin master
+          
           git add reports/ report_summary.json
-          git commit -m "chore: update analysis artifacts [skip ci]" || echo "no changes"
+          
+          git commit -m "chore: update analysis artifacts [skip ci]" || echo "No changes to commit"
           git push
 
-      - name: Upload artifact (reports/)
+      - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: reports
@@ -178,6 +183,9 @@ jobs:
         id: deploy
         uses: actions/deploy-pages@v4
 
+      # ------------------------------------------------------------------
+      # reply comments
+      # ------------------------------------------------------------------
       - name: Comment back as Noema-Bot
         if: ${{ github.event_name == 'issue_comment' }}
         uses: peter-evans/create-or-update-comment@v4
@@ -185,16 +193,16 @@ jobs:
           token: ${{ secrets.BOT_TOKEN || secrets.GITHUB_TOKEN }}
           issue-number: ${{ github.event.issue.number }}
           body: |
-            🤖 **Noema-Bot** finished the analysis.
+            🤖 **Noema-Bot Analysis Completed**
 
-            **Dashboard (GitHub Pages):**
-            ${{ steps.deploy.outputs.page_url }}reports/
+            **📊 Dashboard:**
+            ${{ steps.deploy.outputs.page_url }}
 
-            **Full report (HTML):**
-            ${{ steps.deploy.outputs.page_url }}reports/report.html
+            **📄 Full Report:**
+            ${{ steps.deploy.outputs.page_url }}report.html
 
-            **Raw markdown summary (repo):**
-            https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/reports/REPORT.md
+            <details>
+            <summary>📝 Analysis Summary</summary>
 
-            ---
             ${{ steps.summary.outputs.md }}
+            </details>
