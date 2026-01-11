@@ -159,20 +159,14 @@ jobs:
 
           touch ./reports/.nojekyll
 
-      # ------------------------------------------------------------------
-      # 提交结果 增加了rebase
-      # ------------------------------------------------------------------
       - name: Commit reports back
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          
-          git pull --rebase origin main || git pull --rebase origin master
-          
           git add reports/ report_summary.json
-          
-          git commit -m "chore: update analysis artifacts [skip ci]" || echo "No changes to commit"
-          git push
+          git commit -m "chore: update analysis artifacts [skip ci]" || echo "⚠️ No changes to commit"
+          git pull --rebase origin main
+          git push origin main
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
