@@ -3,6 +3,7 @@
 from __future__ import annotations
 import argparse
 import os
+import sys
 from pathlib import Path
 from typing import List, Tuple, Optional, Dict, Any
 import json
@@ -15,43 +16,63 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+# SETUP PATHS
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT / "data"
 REPORTS_DIR = ROOT / "reports"
 IMG_DIR = REPORTS_DIR / "img"
+
+# Ensure directories exist
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 IMG_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def find_files(file_arg: str) -> List[Path]:
-    """Resolve files to analyze. If file_arg is empty -> all CSV under data/."""
+    """
+    Resolve files to analyze.
+    - If file_arg is provided: MUST exist, or we raise an error.
+    - If file_arg is empty: Return all .csv files in data/.
+    """
     files: List[Path] = []
+    
     if file_arg:
-        # allow raw name or path under data/
-        p = Path(file_arg)
-        if not p.is_absolute():
-            p = (DATA_DIR / file_arg).resolve()
-        if p.exists() and p.suffix.lower() == ".csv":
-            files = [p]
+        # Strip potential quotes or whitespace
+        clean_name = file_arg.strip().strip("'").strip('"')
+        
+        # Try finding the file in DATA_DIR
+        candidate = DATA_DIR / clean_name
+        
+        # Fallback: maybe user passed "data/filename.csv" explicitly
+        if not candidate.exists():
+            candidate = ROOT / clean_name
+            
+        if candidate.exists() and candidate.suffix.lower() == ".csv":
+            files = [candidate]
         else:
-            print(f"[warn] file not found or not CSV: {p}")
+            # CRITICAL: Fail hard if user specified a file that doesn't exist
+            print(f"::error::File not found or not CSV: {clean_name}")
+            sys.exit(1)
     else:
+        # Auto-discovery
         files = sorted(DATA_DIR.glob("*.csv"))
+        if not files:
+            print("::warning::No CSV files found in data/ directory.")
+            
     return files
 
 
 def read_concat(files: List[Path]) -> Tuple[pd.DataFrame, List[pd.DataFrame]]:
-    """Read CSV files and concat (row-wise). Empty -> empty DF."""
+    """Read CSV files and concat (row-wise)."""
     frames: List[pd.DataFrame] = []
     for fp in files:
         try:
             df = pd.read_csv(fp)
             df["__source_file__"] = fp.name
             frames.append(df)
-            print(f"[load] {fp} -> shape={df.shape}")
+            print(f"[load] {fp.name} -> shape={df.shape}")
         except Exception as e:
-            print(f"[warn] failed reading {fp}: {e}")
+            print(f"::error::Failed reading {fp.name}: {e}")
 
     if frames:
         df_all = pd.concat(frames, axis=0, ignore_index=True)
@@ -61,153 +82,75 @@ def read_concat(files: List[Path]) -> Tuple[pd.DataFrame, List[pd.DataFrame]]:
     return df_all, frames
 
 
-def safe_shape(df: Optional[pd.DataFrame], frames: Optional[List[pd.DataFrame]] = None) -> Tuple[int, int]:
-    """Return (rows, cols), robust even if df is None/invalid."""
-    try:
-        if isinstance(df, pd.DataFrame):
-            r, c = df.shape
-            return int(r), int(c)
-    except Exception:
-        pass
-
-    if frames:
-        try:
-            tmp = pd.concat(frames, axis=0, ignore_index=True)
-            r, c = tmp.shape
-            return int(r), int(c)
-        except Exception:
-            pass
-    return (0, 0)
-
-
 def numeric_cols(df: pd.DataFrame) -> List[str]:
     if df is None or df.empty:
         return []
+    # select only number columns
     num = df.select_dtypes(include=[np.number]).columns.tolist()
-    # drop the helper col if numeric by accident
+    # exclude our helper column if it somehow became numeric
     return [c for c in num if c != "__source_file__"]
 
 
 def plot_numeric_histograms(df: pd.DataFrame, cols: List[str], n_limit: int) -> List[str]:
-    """Return list of saved image paths (relative to reports/)."""
-    saved = []
-    if not cols:
-        return saved
-    if n_limit and n_limit > 0:
-        cols = cols[: n_limit]
+    """Generate histograms and return relative paths for Markdown."""
+    saved_paths = []
+    if not cols or df.empty:
+        return saved_paths
 
-    for col in cols:
+    # Limit number of plots if n > 0
+    targets = cols[:n_limit] if (n_limit and n_limit > 0) else cols
+
+    for col in targets:
         try:
             series = pd.to_numeric(df[col], errors="coerce").dropna()
             if series.empty:
                 continue
+            
             plt.figure(figsize=(6, 4))
-            plt.hist(series, bins=30)
+            plt.hist(series, bins=30, color="#4e79a7", edgecolor="black", alpha=0.7)
             plt.title(f"Histogram: {col}")
             plt.xlabel(col)
-            plt.ylabel("Count")
-            out = IMG_DIR / f"hist_{re.sub(r'[^A-Za-z0-9_]+','_', col)}.png"
+            plt.ylabel("Frequency")
+            plt.grid(axis='y', alpha=0.3)
+            
+            # Safe filename
+            safe_name = re.sub(r'[^A-Za-z0-9_]+', '_', col)
+            out_path = IMG_DIR / f"hist_{safe_name}.png"
+            
             plt.tight_layout()
-            plt.savefig(out)
-            plt.close()
-            saved.append(str(out.relative_to(REPORTS_DIR)))
-            print(f"[plot] {col} -> {out}")
+            plt.savefig(out_path, dpi=100)
+            plt.close() # Free memory
+            
+            # Store path relative to reports/ for the MD/QD file
+            # e.g. "img/hist_Age.png"
+            rel_path = out_path.relative_to(REPORTS_DIR).as_posix()
+            saved_paths.append(rel_path)
+            print(f"[plot] Generated: {rel_path}")
+            
         except Exception as e:
-            print(f"[warn] failed plotting {col}: {e}")
-    return saved
+            print(f"[warn] Failed plotting {col}: {e}")
+            
+    return saved_paths
 
 
-def md_escape(text: str) -> str:
-    return str(text).replace("<", "&lt;").replace(">", "&gt;")
+def build_markdown_summary(targets: List[Path], df: pd.DataFrame, img_rel: List[str], n_limit: int) -> str:
+    """Construct the summary text for Issue Comment and Report."""
+    if df is None or df.empty:
+        return "⚠️ **Analysis Failed:** No data was loaded."
 
-
-def build_markdown_summary(targets: List[Path], df: pd.DataFrame, frames: List[pd.DataFrame], img_rel: List[str], n_limit: int) -> str:
-    rows, cols = safe_shape(df, frames)
-    tgt_list = ", ".join([f"`{t.name}`" for t in targets]) if targets else "_<none>_"
+    rows, cols = df.shape
+    tgt_names = ", ".join([f"`{t.name}`" for t in targets])
+    
+    num_cols = numeric_cols(df)
+    
     lines = []
-    lines.append(f"**Targets:** [{tgt_list}]")
-    lines.append(f"**Rows:** **{rows}**, **Cols:** **{cols}**  ")
-    if df is not None and not df.empty:
-        lines.append(f"**Numeric columns found:** {len(numeric_cols(df))}")
-        if n_limit and n_limit > 0:
-            lines.append(f"**Plotted (limit n):** {n_limit}")
-    else:
-        lines.append("_No data loaded; generated empty report._")
+    lines.append(f"**Data Sources:** {tgt_names}")
+    lines.append(f"**Dimensions:** {rows} rows × {cols} columns")
+    lines.append(f"**Numeric Columns:** {len(num_cols)}")
+    
+    if n_limit > 0 and len(num_cols) > n_limit:
+        lines.append(f"*(Plots limited to first {n_limit} columns)*")
 
     if img_rel:
-        lines.append("\n**Figures:**")
-        for rel in img_rel:
-            lines.append(f"![](./{rel})")
-    return "\n".join(lines)
-
-
-def write_qd_files(summary_md: str, title: str = "Noema Report") -> None:
-    """Create minimal, valid .qd files that Quarkdown can compile."""
-    noema_qd = f"""---
-title: {md_escape(title)}
-author: Noema-Bot
----
-
-# Summary
-
-{summary_md}
-
----
-
-# Notes
-
-- This is an auto-generated report.
-- Edit `scripts/analyze.py` to customize sections & visuals.
-
-"""
-    (REPORTS_DIR / "noema-report.qd").write_text(noema_qd, encoding="utf-8")
-
-    dashboard_qd = f"""---
-title: Noema Dashboard
-author: Noema-Bot
----
-
-# Dashboard
-
-- [Full report](./report.html)
-- Raw summary is embedded below.
-
-## Quick Summary
-
-{summary_md}
-
-"""
-    (REPORTS_DIR / "dashboard.qd").write_text(dashboard_qd, encoding="utf-8")
-
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--n", type=int, default=0, help="Max numeric columns to plot (0 = all)")
-    parser.add_argument("--file", type=str, default="", help="Optional CSV file under data/ (empty = auto)")
-    args = parser.parse_args()
-
-    files = find_files(args.file)
-    print(f"Targets: {[str(p.relative_to(ROOT)) if p.exists() else str(p) for p in files]}")
-    df, frames = read_concat(files)
-
-    # plots
-    nums = numeric_cols(df)
-    img_rel = plot_numeric_histograms(df, nums, args.n)
-
-    # markdown summary
-    summary_md = build_markdown_summary(files, df, frames, img_rel, args.n)
-    (REPORTS_DIR / "REPORT.md").write_text(summary_md, encoding="utf-8")
-
-    # JSON summary for workflow comment step
-    summary_json: Dict[str, Any] = {"markdown": summary_md}
-    Path(ROOT / "report_summary.json").write_text(json.dumps(summary_json, ensure_ascii=False, indent=2), encoding="utf-8")
-
-    # QD files for Quarkdown compile
-    write_qd_files(summary_md, title="Noema Analysis Report")
-
-    print("Writing QD to: reports/noema-report.qd")
-    print("Done.")
-
-
-if __name__ == "__main__":
-    main()
+        lines.append("\n### 📊 Visualizations")
+        for rel in img_
